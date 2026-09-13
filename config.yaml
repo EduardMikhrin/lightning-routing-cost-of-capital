@@ -67,6 +67,15 @@ model:
 
   scenarios:
     capacities_btc: [0.1, 1.0, 10.0]
+    # One row per (capacity, ppm) pair.
+    #   100  OBSERVED  network median fee rate, mempool.space med_fee_rate
+    #   464  OBSERVED  median across Amboss-ranked nodes, ppm_distribution.csv p50
+    #   1000 ASSUMPTION an aggressive fee strategy
+    # The two observed values are those of the 2026-09-13 snapshot. After a new
+    # snapshot, re-read them from network_snapshot.csv and ppm_distribution.csv
+    # and update this list — build_tables.py prints both next to each other in
+    # its summary so the drift is visible.
+    ppm_list: [100, 464, 1000]
 
   # r_reb: rebalancing outlay as a share of gross routing revenue. ASSUMPTION.
   rebalancing_share_of_earned: 0.30
@@ -94,11 +103,26 @@ model:
   opex_usd_per_year: 300
 
 cost_of_capital:
-  # Which row of table2 the break-even calculation is measured against.
-  # Must match a `source` value emitted into table2_cost_of_capital.csv.
+  # OBSERVED. The benchmark APY is measured against is not a number set here:
+  # it names a row of table2_cost_of_capital.csv, which is computed from the
+  # Magma snapshot at build time. Presets, all observed, all from the same
+  # snapshot:
+  #   magma_orders_median      median LNR of executed Magma leases   <- default
+  #   amboss_lnr_index_latest  Amboss's own published aggregate LNR index
+  #   magma_offers_median      median annualised rate of open Magma offers
+  # Any other `source` value present in table2 also works (quartiles included);
+  # an unknown name is a hard error listing what is available.
   reference_source: "magma_orders_median"
-  # ASSUMPTION: return forgone on self-funded BTC. 0.0 = BTC held idle anyway.
-  own_btc_opportunity_annual_pct: 0.0
+
+  own_btc_opportunity:
+    # OBSERVED: the opportunity cost of self-funded BTC is what the same coins
+    # would earn leased out on Magma instead of being routed, so it is read
+    # from the named table2 row rather than asserted. A literal 0.0 here would
+    # make the paper's central comparison vacuous.
+    from_source: "magma_orders_median"
+    # ASSUMPTION escape hatch: a number overrides the observed figure above
+    # (0.0 = the coins would sit idle anyway). null keeps it observed.
+    override_annual_pct: null
 
 magma:
   # Notional channel size at which open offers are annualised, so that the
@@ -123,7 +147,20 @@ fee_distribution:
   weight_by: "channels"              # channels | capacity
   percentiles: [25, 50, 75, 90]
 
+onchain_sensitivity:
+  # The snapshot caught a near-empty mempool, where every recommended tier reads
+  # 1 sat/vB and on-chain amortisation is negligible. That is a real observation
+  # but not a representative one, so the model is also run at higher fee levels.
+  #
+  # The observed tier is always emitted as the base case. The levels below are
+  # STRESS SCENARIOS, not observations, and are labelled as such in the output.
+  # A level equal to the observed value is skipped rather than duplicated.
+  sat_per_vb_levels: [1, 50, 200]
+
 sensitivity:
+  # This sweep is deliberately a different ppm list from model.scenarios.ppm_list:
+  # the scenarios are three named, defensible fee policies, while this is a fine
+  # grid for the figure and the break-even surface. Not a copy-paste slip.
   utilization_min: 0.0
   utilization_max: 1.0
   utilization_step: 0.05

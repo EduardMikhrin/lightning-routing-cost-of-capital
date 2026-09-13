@@ -156,8 +156,9 @@ on the cost-of-capital line, so the two cannot drift apart.
 
 | File | Contents |
 |---|---|
-| `data/derived/table2_cost_of_capital.csv` | price of capital, annualised: own BTC (assumption), Magma open offers (p25/median/p75/p90), executed Magma leases (p25/median/p75/p90), and the Amboss LNR index. Columns: `source, observed_rate_annual_pct, basis, snapshot_date, note`. |
-| `data/derived/table3_scenarios.csv` | the model at each node size in `model.scenarios.capacities_btc`, every term broken out in satoshis. |
+| `data/derived/table2_cost_of_capital.csv` | price of capital, annualised: own BTC (observed — read off one of the rows below, see `cost_of_capital.own_btc_opportunity`), Magma open offers (p25/median/p75/p90), executed Magma leases (p25/median/p75/p90), and the Amboss LNR index. Columns: `source, observed_rate_annual_pct, basis, snapshot_date, note`. |
+| `data/derived/table3_scenarios.csv` | one row per (capacity, ppm) pair from `model.scenarios`, every term broken out in satoshis, plus break-even utilisation and whether it is reachable. |
+| `data/derived/onchain_sensitivity.csv` | the same scenario grid re-run at several on-chain fee levels. The observed tier is the base case (`basis = observed`); the rest are stress scenarios (`basis = stress`), not observations. |
 | `data/derived/sensitivity.csv` | APY over the `u` × `ppm` grid, with `break_even_u` and a flag for whether it is reachable at `u ≤ 1`. |
 | `data/derived/ppm_distribution.csv` | outbound fee-rate percentiles plus the network-wide mempool.space comparison, and the sample-coverage rows. |
 | `data/derived/ppm_histogram.csv` | the merged bucket histogram the percentiles were interpolated from. |
@@ -179,6 +180,66 @@ is already annualised and is not re-scaled here.
 300 dpi, 16.0 × 10.0 cm (an A4 text block with ~2.5 cm margins), serif labels at
 9 pt, and curves separated by line style *and* marker so the plot survives
 black-and-white printing. The underlying values ship alongside as CSV.
+
+---
+
+## Headline results
+
+Snapshot `2026-09-13`. Benchmark: **2.37 %/yr**, the median annualised rate on
+executed Magma leases (`magma_orders_median`, n=3265) — the observed price of
+renting the same liquidity, which is also what `own_btc_opportunity` is set to.
+Baseline utilisation `u = 0.15`, on-chain fees at the observed 1 sat/vB. Source:
+[`table3_scenarios.csv`](data/derived/table3_scenarios.csv).
+
+| Capacity | ppm | APY | vs benchmark | break-even `u*` | reachable at `u ≤ 1` |
+|---:|---:|---:|---:|---:|:--|
+| 0.1 BTC | 100 (network median) | −3.53 % | −5.91 pp | 2.46 | **no** |
+| 0.1 BTC | 464 (ranked-node median) | −2.14 % | −4.51 pp | 0.53 | yes |
+| 0.1 BTC | 1000 (aggressive) | −0.09 % | −2.46 pp | 0.25 | yes |
+| 1 BTC | 100 | −0.02 % | −2.39 pp | 1.09 | **no** |
+| 1 BTC | 464 | +1.38 % | −0.99 pp | 0.23 | yes |
+| 1 BTC | 1000 | **+3.43 %** | **+1.06 pp** | 0.11 | yes |
+| 10 BTC | 100 | +0.33 % | −2.04 pp | 0.95 | yes |
+| 10 BTC | 464 | +1.73 % | −0.64 pp | 0.20 | yes |
+| 10 BTC | 1000 | **+3.78 %** | **+1.41 pp** | 0.09 | yes |
+
+Two of the nine scenarios clear the benchmark at `u = 0.15`, both at the
+aggressive 1000 ppm. At the observed median fee rates — 100 ppm network-wide,
+464 ppm across Amboss-ranked nodes — routing returns less than simply leasing
+the same capital out on Magma.
+
+Three things drive that:
+
+- **Fee rate dominates.** Moving from the network median to an aggressive policy
+  swings APY by roughly 3.5 pp at every node size. Nothing else in the model has
+  that leverage.
+- **Fixed OPEX punishes small nodes.** $300/yr is 5 % of a 0.1 BTC node's
+  capital, so every 0.1 BTC scenario is negative regardless of fee policy; at
+  100 ppm the required utilisation (2.46) is not merely unreachable but
+  physically meaningless.
+- **Scale saturates early.** The 1 → 10 BTC step adds only ~0.35 pp, because
+  OPEX is the only term that does not scale with capacity.
+
+Break-even utilisation is reachable at `u ≤ 1` in seven of nine scenarios, but
+"reachable" is not "plausible": `u = 0.23` means turning over 23 % of locked
+capital *every day*, sustained for a year. The repository publishes no observed
+`u`, and none is available from any public API — see
+*[Not available from any source](#not-available-from-any-source-in-this-repository)*.
+
+**On-chain fees were not a factor in this snapshot, and that is an artefact.**
+The mempool was near-empty at 1 sat/vB. Re-running the same grid at stress levels
+([`onchain_sensitivity.csv`](data/derived/onchain_sensitivity.csv)) shows what a
+busy fee market costs a 1 BTC node:
+
+| ppm | 1 sat/vB (observed) | 50 sat/vB (stress) | 200 sat/vB (stress) |
+|---:|---:|---:|---:|
+| 100 | −0.02 % | −0.53 % | −2.10 % |
+| 464 | +1.38 % | +0.86 % | −0.71 % |
+| 1000 | +3.43 % | +2.92 % | +1.35 % |
+
+At 200 sat/vB the 464 ppm case flips negative. The 50 and 200 sat/vB columns are
+**assumptions about a fee market this snapshot did not see**, not observations,
+and are labelled `basis = stress` in the CSV.
 
 ---
 

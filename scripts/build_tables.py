@@ -112,6 +112,20 @@ def _date_only(value: str) -> str:
     return str(value)[:10]
 
 
+def _normalise_iso(value: str) -> str:
+    """Bring a source's own timestamp onto the repository's UTC format.
+
+    mempool.space stamps `added` with milliseconds; everything else in the
+    manifest is second-resolution. One column must not mix the two.
+    """
+    text = str(value).strip()
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return text
+    return parsed.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 # --------------------------------------------------------------------------
 # inputs
 # --------------------------------------------------------------------------
@@ -133,7 +147,7 @@ def load_network(cfg: dict) -> dict:
         # `added` is the timestamp mempool.space assigns to the statistics row
         # itself. It lags the fetch, and the paper must cite this date, not the
         # moment the script happened to run.
-        "data_as_of_utc": str(latest["added"]),
+        "data_as_of_utc": _normalise_iso(latest["added"]),
         **latest,
     }
 
@@ -473,6 +487,8 @@ class Model:
         self.opex_usd_per_year = float(model["opex_usd_per_year"])
         self.opex_sat = self.opex_usd_per_year / self.btc_usd * SAT_PER_BTC
 
+        # The observed per-channel cost. onchain_amortized_sat() recomputes it
+        # whenever a stress level is passed in.
         self.onchain_per_channel_sat = (
             (self.open_vbytes + self.close_vbytes) * self.sat_per_vb
         )
@@ -484,18 +500,29 @@ class Model:
         rounding up would overstate on-chain cost for the smallest scenario."""
         return capacity_btc * SAT_PER_BTC / self.channel_size_sat
 
-    def onchain_amortized_sat(self, capacity_btc: float) -> float:
+    def onchain_amortized_sat(
+        self, capacity_btc: float, sat_per_vb: float | None = None
+    ) -> float:
+        """`sat_per_vb` defaults to the observed tier; pass a level to stress it."""
+        rate = self.sat_per_vb if sat_per_vb is None else float(sat_per_vb)
+        per_channel = (self.open_vbytes + self.close_vbytes) * rate
         annualisation = MONTHS_PER_YEAR / self.lifetime_months
-        return self.channels(capacity_btc) * self.onchain_per_channel_sat * annualisation
+        return self.channels(capacity_btc) * per_channel * annualisation
 
     def f_earned_sat(self, capacity_btc: float, ppm: float, u: float) -> float:
         volume_sat = u * capacity_btc * SAT_PER_BTC * self.days_per_year
         return ppm * 1e-6 * volume_sat
 
-    def terms(self, capacity_btc: float, ppm: float, u: float) -> dict:
+    def terms(
+        self,
+        capacity_btc: float,
+        ppm: float,
+        u: float,
+        sat_per_vb: float | None = None,
+    ) -> dict:
         earned = self.f_earned_sat(capacity_btc, ppm, u)
         rebalancing = self.r_reb * earned
-        onchain = self.onchain_amortized_sat(capacity_btc)
+        onchain = self.onchain_amortized_sat(capacity_btc, sat_per_vb)
         opex = self.opex_sat
         net = earned - rebalancing - onchain - opex
         locked_sat = capacity_btc * SAT_PER_BTC
@@ -511,10 +538,22 @@ class Model:
             "apy_routing_pct": net / locked_sat * 100.0,
         }
 
-    def apy_pct(self, capacity_btc: float, ppm: float, u: float) -> float:
-        return self.terms(capacity_btc, ppm, u)["apy_routing_pct"]
+    def apy_pct(
+        self,
+        capacity_btc: float,
+        ppm: float,
+        u: float,
+        sat_per_vb: float | None = None,
+    ) -> float:
+        return self.terms(capacity_btc, ppm, u, sat_per_vb)["apy_routing_pct"]
 
-    def break_even_u(self, capacity_btc: float, ppm: float, coc_pct: float):
+    def break_even_u(
+        self,
+        capacity_btc: float,
+        ppm: float,
+        coc_pct: float,
+        sat_per_vb: float | None = None,
+    ):
         """Utilisation at which APY_routing meets the cost of capital.
 
         Closed form: APY is affine in u. Returns None when no u satisfies it
@@ -524,7 +563,9 @@ class Model:
         if slope <= 0:
             return None
         locked_sat = capacity_btc * SAT_PER_BTC
-        fixed = (self.onchain_amortized_sat(capacity_btc) + self.opex_sat) / locked_sat
+        fixed = (
+            self.onchain_amortized_sat(capacity_btc, sat_per_vb) + self.opex_sat
+        ) / locked_sat
         return (coc_pct / 100.0 + fixed) / slope
 
 
@@ -532,31 +573,66 @@ class Model:
 # tables
 # --------------------------------------------------------------------------
 
-def write_network_snapshot(network: dict, fees: dict, price: dict, history: pd.DataFrame) -> pd.DataFrame:
+def write_network_snapshot(
+    network: dict, fees: dict, price: dict, history: pd.DataFrame
+) -> pd.DataFrame:
+    """Headline figures, each stamped with the as-of date of its OWN source.
+
+    The three sources in this table were observed at different moments and must
+    not share one date. The mempool.space statistics row carries `added`, the
+    date mempool.space assigned to the row, which lags collection by up to a
+    fortnight. The fee tiers are a live estimate with no timestamp of their own,
+    so they carry the moment they were fetched. The CoinGecko quote carries the
+    exchange's own `last_updated_at`, which is what the price actually refers to.
+    """
+    stats_as_of = str(network["data_as_of_utc"])
+    stats_source = "mempool.space lightning/statistics/latest"
+    stats_fetched = network["fetched_at_utc"]
+
+    fee_as_of = fees["fetched_at_utc"]
+    fee_source = f"mempool.space {fees['endpoint']}"
+
+    # CoinGecko returns last_updated_at only when asked for it; fall back to the
+    # fetch time rather than borrowing a date from another source.
+    last_updated = price["quotes"].get("last_updated_at")
+    price_as_of = _ts_to_iso(last_updated) if last_updated else price["fetched_at_utc"]
+    price_source = "CoinGecko simple/price"
+
     rows = [
-        ("total_capacity_btc", network["total_capacity"] / SAT_PER_BTC, "BTC", "mempool.space lightning/statistics/latest"),
-        ("total_capacity_sat", network["total_capacity"], "sat", "mempool.space lightning/statistics/latest"),
-        ("node_count", network["node_count"], "nodes", "mempool.space lightning/statistics/latest"),
-        ("channel_count", network["channel_count"], "channels", "mempool.space lightning/statistics/latest"),
-        ("avg_channel_capacity_sat", network["avg_capacity"], "sat", "mempool.space lightning/statistics/latest"),
-        ("med_channel_capacity_sat", network["med_capacity"], "sat", "mempool.space lightning/statistics/latest"),
-        ("avg_fee_rate_ppm", network["avg_fee_rate"], "ppm", "mempool.space lightning/statistics/latest"),
-        ("med_fee_rate_ppm", network["med_fee_rate"], "ppm", "mempool.space lightning/statistics/latest"),
-        ("avg_base_fee_msat", network["avg_base_fee_mtokens"], "msat", "mempool.space lightning/statistics/latest"),
-        ("med_base_fee_msat", network["med_base_fee_mtokens"], "msat", "mempool.space lightning/statistics/latest"),
-        ("tor_nodes", network["tor_nodes"], "nodes", "mempool.space lightning/statistics/latest"),
-        ("clearnet_nodes", network["clearnet_nodes"], "nodes", "mempool.space lightning/statistics/latest"),
-        (f"onchain_fee_{fees['tier']}_sat_per_vb", fees["sat_per_vb"], "sat/vB", f"mempool.space {fees['endpoint']}"),
-        ("btc_usd", price["btc_usd"], "USD", "CoinGecko simple/price"),
+        ("total_capacity_btc", network["total_capacity"] / SAT_PER_BTC, "BTC", stats_source, stats_as_of, stats_fetched),
+        ("total_capacity_sat", network["total_capacity"], "sat", stats_source, stats_as_of, stats_fetched),
+        ("node_count", network["node_count"], "nodes", stats_source, stats_as_of, stats_fetched),
+        ("channel_count", network["channel_count"], "channels", stats_source, stats_as_of, stats_fetched),
+        ("avg_channel_capacity_sat", network["avg_capacity"], "sat", stats_source, stats_as_of, stats_fetched),
+        ("med_channel_capacity_sat", network["med_capacity"], "sat", stats_source, stats_as_of, stats_fetched),
+        ("avg_fee_rate_ppm", network["avg_fee_rate"], "ppm", stats_source, stats_as_of, stats_fetched),
+        ("med_fee_rate_ppm", network["med_fee_rate"], "ppm", stats_source, stats_as_of, stats_fetched),
+        ("avg_base_fee_msat", network["avg_base_fee_mtokens"], "msat", stats_source, stats_as_of, stats_fetched),
+        ("med_base_fee_msat", network["med_base_fee_mtokens"], "msat", stats_source, stats_as_of, stats_fetched),
+        ("tor_nodes", network["tor_nodes"], "nodes", stats_source, stats_as_of, stats_fetched),
+        ("clearnet_nodes", network["clearnet_nodes"], "nodes", stats_source, stats_as_of, stats_fetched),
+        (f"onchain_fee_{fees['tier']}_sat_per_vb", fees["sat_per_vb"], "sat/vB", fee_source, fee_as_of, fee_as_of),
+        ("btc_usd", price["btc_usd"], "USD", price_source, price_as_of, price["fetched_at_utc"]),
     ]
     for currency, value in price["quotes"].items():
         if currency in ("usd", "last_updated_at"):
             continue
-        rows.append((f"btc_{currency}", value, currency.upper(), "CoinGecko simple/price"))
+        rows.append(
+            (f"btc_{currency}", value, currency.upper(), price_source,
+             price_as_of, price["fetched_at_utc"])
+        )
 
-    frame = pd.DataFrame(rows, columns=["metric", "value", "unit", "source"])
-    frame["data_as_of_utc"] = network["data_as_of_utc"]
-    frame["snapshot_fetched_at_utc"] = network["fetched_at_utc"]
+    frame = pd.DataFrame(
+        rows,
+        columns=[
+            "metric",
+            "value",
+            "unit",
+            "source",
+            "data_as_of_utc",
+            "snapshot_fetched_at_utc",
+        ],
+    )
     frame.to_csv(DERIVED_DIR / "network_snapshot.csv", index=False)
 
     history.to_csv(DERIVED_DIR / "lightning_history.csv", index=False)
@@ -659,20 +735,6 @@ def write_ppm_distribution(distribution: dict, network: dict) -> pd.DataFrame:
 def write_cost_of_capital(cfg: dict, offers: dict, orders: dict, index: dict) -> pd.DataFrame:
     rows = []
 
-    own = float(cfg["cost_of_capital"]["own_btc_opportunity_annual_pct"])
-    rows.append(
-        {
-            "source": "own_btc_opportunity",
-            "observed_rate_annual_pct": own,
-            "basis": "config cost_of_capital.own_btc_opportunity_annual_pct",
-            "snapshot_date": "",
-            "note": (
-                "ASSUMPTION, not observed: the return forgone on self-funded BTC. "
-                "0.0 means the coins would otherwise sit idle."
-            ),
-        }
-    )
-
     offer_basis = (
         f"Magma open SELL offers, n={offers['n']}, priced at a "
         f"{offers['reference_size_sat']:,.0f} sat reference channel "
@@ -726,12 +788,57 @@ def write_cost_of_capital(cfg: dict, offers: dict, orders: dict, index: dict) ->
         }
     )
 
+    # The opportunity cost of self-funded BTC is what those coins would earn
+    # leased out on Magma instead of being routed, so it is read off one of the
+    # observed rows above rather than asserted. Built last because it depends on
+    # them; inserted first because it is the paper's baseline comparison.
+    rows.insert(0, _own_btc_row(cfg, rows))
+
     frame = pd.DataFrame(
         rows,
         columns=["source", "observed_rate_annual_pct", "basis", "snapshot_date", "note"],
     )
     frame.to_csv(DERIVED_DIR / "table2_cost_of_capital.csv", index=False)
     return frame
+
+
+def _own_btc_row(cfg: dict, observed_rows: list[dict]) -> dict:
+    """The `own_btc_opportunity` row: observed by default, overridable."""
+    settings = cfg["cost_of_capital"]["own_btc_opportunity"]
+    override = settings.get("override_annual_pct")
+
+    if override is not None:
+        return {
+            "source": "own_btc_opportunity",
+            "observed_rate_annual_pct": float(override),
+            "basis": "config cost_of_capital.own_btc_opportunity.override_annual_pct",
+            "snapshot_date": "",
+            "note": (
+                "ASSUMPTION, not observed: an explicit override of the return "
+                "forgone on self-funded BTC."
+            ),
+        }
+
+    wanted = str(settings["from_source"])
+    by_source = {row["source"]: row for row in observed_rows}
+    if wanted not in by_source:
+        raise FetchError(
+            f"cost_of_capital.own_btc_opportunity.from_source={wanted!r} is not "
+            f"an observed row. Available: {sorted(by_source)}"
+        )
+    source_row = by_source[wanted]
+    return {
+        "source": "own_btc_opportunity",
+        "observed_rate_annual_pct": source_row["observed_rate_annual_pct"],
+        "basis": f"OBSERVED, taken from {wanted}: {source_row['basis']}",
+        "snapshot_date": source_row["snapshot_date"],
+        "note": (
+            "the return forgone on self-funded BTC, measured as what the same "
+            f"coins would earn leased out on Magma ({wanted}). Set "
+            "cost_of_capital.own_btc_opportunity.override_annual_pct to assert a "
+            "different figure."
+        ),
+    }
 
 
 def _quartiles(sorted_rates: list[float]) -> dict:
@@ -768,15 +875,37 @@ def resolve_cost_of_capital(cfg: dict, table2: pd.DataFrame) -> tuple[str, float
     return wanted, float(match.iloc[0])
 
 
-def write_scenarios(cfg: dict, model: Model) -> pd.DataFrame:
-    baseline = cfg["model"]["baseline"]
-    ppm = float(baseline["ppm"])
-    u = float(baseline["utilization"])
+def scenario_grid(cfg: dict) -> list[tuple[float, float]]:
+    """Every (capacity, ppm) pair the scenario tables are evaluated on."""
+    scenarios = cfg["model"]["scenarios"]
+    capacities = [float(c) for c in scenarios["capacities_btc"]]
+    ppm_list = [float(p) for p in scenarios["ppm_list"]]
+    if not capacities or not ppm_list:
+        raise FetchError(
+            "model.scenarios needs at least one capacity and one ppm value"
+        )
+    return [(capacity, ppm) for capacity in capacities for ppm in ppm_list]
 
-    rows = [
-        model.terms(float(capacity), ppm, u)
-        for capacity in cfg["model"]["scenarios"]["capacities_btc"]
-    ]
+
+def write_scenarios(cfg: dict, model: Model, coc_pct: float) -> pd.DataFrame:
+    """One row per (capacity, ppm) pair, at the baseline utilisation.
+
+    Break-even utilisation is carried alongside because it depends on capacity:
+    OPEX is a fixed USD cost, so it weighs far more heavily on a small node.
+    """
+    u = float(cfg["model"]["baseline"]["utilization"])
+
+    rows = []
+    for capacity, ppm in scenario_grid(cfg):
+        terms = model.terms(capacity, ppm, u)
+        break_even = model.break_even_u(capacity, ppm, coc_pct)
+        terms["cost_of_capital_annual_pct"] = round(coc_pct, 4)
+        terms["break_even_u"] = "" if break_even is None else round(break_even, 6)
+        terms["break_even_attainable"] = (
+            "" if break_even is None else bool(0.0 <= break_even <= 1.0)
+        )
+        rows.append(terms)
+
     frame = pd.DataFrame(rows)[
         [
             "node_capacity_btc",
@@ -788,6 +917,9 @@ def write_scenarios(cfg: dict, model: Model) -> pd.DataFrame:
             "opex_sat",
             "net_income_sat",
             "apy_routing_pct",
+            "cost_of_capital_annual_pct",
+            "break_even_u",
+            "break_even_attainable",
         ]
     ]
     for column in frame.columns:
@@ -795,6 +927,62 @@ def write_scenarios(cfg: dict, model: Model) -> pd.DataFrame:
             frame[column] = frame[column].round(0)
     frame["apy_routing_pct"] = frame["apy_routing_pct"].round(4)
     frame.to_csv(DERIVED_DIR / "table3_scenarios.csv", index=False)
+    return frame
+
+
+def write_onchain_sensitivity(
+    cfg: dict, model: Model, fees: dict, coc_pct: float
+) -> pd.DataFrame:
+    """The scenario grid re-run at several on-chain fee levels.
+
+    The snapshot caught a near-empty mempool, where every recommended tier reads
+    1 sat/vB and on-chain amortisation all but vanishes. That is a real
+    observation, not a representative one, so the same grid is also evaluated at
+    the configured stress levels. The observed row is the base case and is
+    labelled `observed`; every other row is labelled `stress` and is an
+    assumption about a fee market that was not seen in this snapshot.
+    """
+    observed = float(model.sat_per_vb)
+    levels = [(observed, "observed")]
+    for level in cfg["onchain_sensitivity"]["sat_per_vb_levels"]:
+        level = float(level)
+        # Skip a configured level that coincides with the observation rather
+        # than emitting the same number twice under two different labels.
+        if abs(level - observed) < 1e-9:
+            continue
+        levels.append((level, "stress"))
+
+    u = float(cfg["model"]["baseline"]["utilization"])
+    rows = []
+    for sat_per_vb, kind in levels:
+        for capacity, ppm in scenario_grid(cfg):
+            terms = model.terms(capacity, ppm, u, sat_per_vb)
+            break_even = model.break_even_u(capacity, ppm, coc_pct, sat_per_vb)
+            rows.append(
+                {
+                    "sat_per_vb": sat_per_vb,
+                    "basis": kind,
+                    "source": (
+                        f"mempool.space {fees['endpoint']}.{fees['tier']}"
+                        if kind == "observed"
+                        else "config onchain_sensitivity.sat_per_vb_levels"
+                    ),
+                    "node_capacity_btc": capacity,
+                    "ppm": ppm,
+                    "utilization": u,
+                    "onchain_amortized_sat": round(terms["onchain_amortized_sat"], 0),
+                    "net_income_sat": round(terms["net_income_sat"], 0),
+                    "apy_routing_pct": round(terms["apy_routing_pct"], 4),
+                    "cost_of_capital_annual_pct": round(coc_pct, 4),
+                    "break_even_u": "" if break_even is None else round(break_even, 6),
+                    "break_even_attainable": (
+                        "" if break_even is None else bool(0.0 <= break_even <= 1.0)
+                    ),
+                }
+            )
+
+    frame = pd.DataFrame(rows)
+    frame.to_csv(DERIVED_DIR / "onchain_sensitivity.csv", index=False)
     return frame
 
 
@@ -1015,7 +1203,8 @@ def main() -> int:
     write_ppm_distribution(distribution, network)
     table2 = write_cost_of_capital(cfg, offers, orders, index)
     coc_source, coc_pct = resolve_cost_of_capital(cfg, table2)
-    table3 = write_scenarios(cfg, model)
+    table3 = write_scenarios(cfg, model, coc_pct)
+    onchain = write_onchain_sensitivity(cfg, model, fees, coc_pct)
     sensitivity = write_sensitivity(cfg, model, coc_source, coc_pct)
 
     print("[build_tables] writing figure")
@@ -1031,6 +1220,10 @@ def main() -> int:
         "onchain_fee_sat_per_vb": model.sat_per_vb,
         "onchain_fee_endpoint": fees["endpoint"],
         "onchain_fee_tier": fees["tier"],
+        "onchain_stress_levels_sat_per_vb": [
+            float(level) for level in cfg["onchain_sensitivity"]["sat_per_vb_levels"]
+        ],
+        "scenario_ppm_list": [float(x) for x in cfg["model"]["scenarios"]["ppm_list"]],
         "btc_usd": model.btc_usd,
         "fee_distribution": {
             "side": distribution["side"],
@@ -1060,14 +1253,31 @@ def main() -> int:
           f"(top-{distribution['nodes_used']} nodes) vs "
           f"{network['med_fee_rate']} network-wide")
     print()
-    print(table3.to_string(index=False))
+    print("  scenarios (u = %.2f, %s sat/vB observed):"
+          % (float(cfg["model"]["baseline"]["utilization"]), model.sat_per_vb))
+    summary = table3[
+        ["node_capacity_btc", "ppm", "apy_routing_pct", "break_even_u",
+         "break_even_attainable"]
+    ]
+    print(summary.to_string(index=False))
+
+    print()
+    print("  on-chain stress (APY %, same grid):")
+    pivot = onchain.pivot_table(
+        index=["node_capacity_btc", "ppm"],
+        columns="sat_per_vb",
+        values="apy_routing_pct",
+    )
+    print(pivot.to_string())
+
     print()
     for ppm in sorted(sensitivity["ppm"].unique()):
         subset = sensitivity[sensitivity["ppm"] == ppm]
         value = subset["break_even_u"].iloc[0]
         attainable = subset["break_even_attainable"].iloc[0]
         flag = "" if attainable in (True, "True") else "  (u > 1: unreachable)"
-        print(f"  break-even u @ {ppm:>6.0f} ppm : {value}{flag}")
+        print(f"  break-even u @ {ppm:>6.0f} ppm : {value}{flag}"
+              f"   [1 BTC, sensitivity grid]")
 
     print("\n[build_tables] done")
     return 0
