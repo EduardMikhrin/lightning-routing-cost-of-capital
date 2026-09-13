@@ -1,4 +1,4 @@
-# lightning-channels-capital
+# lightning-routing-cost-of-capital
 
 **Eduard Mikhrin** ([0009-0002-6104-4368](https://orcid.org/0009-0002-6104-4368))
 National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic
@@ -75,8 +75,8 @@ one. Set it to raise your rate limit and to be an identifiable client:
 2. `cp .env.example .env` and fill in `AMBOSS_API_KEY=...`.
 
 `.env` is in `.gitignore` and must never be committed. Also edit
-`http.user_agent` in `config.yaml` to carry a real contact address before
-running against public APIs.
+`http.user_agent` in `config.yaml` if you fork this — it identifies the client
+to the public APIs and should point at your own repository, not this one.
 
 ### Full run — one command
 
@@ -223,8 +223,8 @@ files committed under `data/raw/`, re-hashes each one against
 byte differs from what was collected, it aborts instead of producing a table.
 
 ```bash
-git clone <repository-url> lightning-channels-capital
-cd lightning-channels-capital
+git clone https://github.com/EduardMikhrin/lightning-routing-cost-of-capital.git
+cd lightning-routing-cost-of-capital
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 make tables PYTHON=.venv/bin/python

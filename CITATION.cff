@@ -27,6 +27,5 @@ keywords:
   - cost of capital
   - liquidity market
   - reproducible research
-# Fill in once the repository is published:
-# repository-code: "https://github.com/<owner>/lightning-channels-capital"
-# url: "https://github.com/<owner>/lightning-channels-capital"
+repository-code: "https://github.com/EduardMikhrin/lightning-routing-cost-of-capital"
+url: "https://github.com/EduardMikhrin/lightning-routing-cost-of-capital"

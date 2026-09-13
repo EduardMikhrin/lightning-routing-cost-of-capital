@@ -7,9 +7,10 @@
 # Assumptions are marked. Do not silently promote an assumption to an observation.
 
 http:
-  # Public APIs expect an identifiable client. Put a real contact address here
-  # before running: an anonymous scraper is the first thing a rate limiter drops.
-  user_agent: "lightning-channels-capital/0.1 (academic research; contact: set-me@example.org)"
+  # Public APIs expect an identifiable client: an anonymous scraper is the first
+  # thing a rate limiter drops. If you fork this, point the URL at your own
+  # repository so the traffic is attributable to you.
+  user_agent: "lightning-routing-cost-of-capital/1.0 (academic research; +https://github.com/EduardMikhrin/lightning-routing-cost-of-capital)"
   timeout_seconds: 30
   retries: 3
   backoff_base_seconds: 1.5          # delay = base ** attempt
