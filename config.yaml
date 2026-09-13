@@ -147,6 +147,28 @@ fee_distribution:
   weight_by: "channels"              # channels | capacity
   percentiles: [25, 50, 75, 90]
 
+elasticity:
+  # ASSUMPTION. The model otherwise holds u independent of ppm — perfectly
+  # inelastic demand for forwarding — and that assumption is what produces the
+  # "raise fees" result. A positive epsilon lets routed volume fall as fees rise:
+  #
+  #     u(ppm) = u0 * (ppm / ppm_ref) ** (-epsilon)
+  #
+  # epsilon = 0 is the inelastic case and must reproduce table3_scenarios.csv
+  # exactly; build_tables.py asserts that and aborts if it ever stops holding.
+  # No elasticity of forwarding demand is observable from any public API, so
+  # every value here is an assumption about behaviour, not a measurement.
+  epsilon_list: [0.0, 0.5, 1.0, 1.5]
+
+  # OBSERVED: null -> the network median fee rate from the mempool.space
+  # snapshot (med_fee_rate, 100 ppm on 2026-09-13). Set a number to override
+  # with an explicit assumption instead.
+  ppm_ref: null
+
+  # u0 is model.baseline.utilization and is deliberately NOT repeated here, so
+  # the epsilon = 0 identity with table3 is structural rather than a coincidence
+  # of two config values happening to agree.
+
 onchain_sensitivity:
   # The snapshot caught a near-empty mempool, where every recommended tier reads
   # 1 sat/vB and on-chain amortisation is negligible. That is a real observation

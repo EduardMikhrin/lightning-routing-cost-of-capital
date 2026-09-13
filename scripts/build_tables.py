@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import statistics
 import sys
 from datetime import datetime, timezone
@@ -974,6 +975,7 @@ def write_onchain_sensitivity(
                     "net_income_sat": round(terms["net_income_sat"], 0),
                     "apy_routing_pct": round(terms["apy_routing_pct"], 4),
                     "cost_of_capital_annual_pct": round(coc_pct, 4),
+                    "clears_benchmark": bool(terms["apy_routing_pct"] >= coc_pct),
                     "break_even_u": "" if break_even is None else round(break_even, 6),
                     "break_even_attainable": (
                         "" if break_even is None else bool(0.0 <= break_even <= 1.0)
@@ -983,6 +985,98 @@ def write_onchain_sensitivity(
 
     frame = pd.DataFrame(rows)
     frame.to_csv(DERIVED_DIR / "onchain_sensitivity.csv", index=False)
+    return frame
+
+
+def resolve_ppm_ref(cfg: dict, network: dict) -> tuple[float, str]:
+    """Reference fee rate the elasticity curve pivots on.
+
+    OBSERVED by default: the network median fee rate from the snapshot, so the
+    curve is anchored to what the network actually charges rather than to a
+    number typed into config.
+    """
+    override = cfg["elasticity"].get("ppm_ref")
+    if override is None:
+        value = float(network["med_fee_rate"])
+        basis = "mempool.space med_fee_rate (observed)"
+    else:
+        value = float(override)
+        basis = "config elasticity.ppm_ref (assumption)"
+    if value <= 0:
+        raise FetchError(f"ppm_ref resolved to {value}; it divides the fee rate")
+    return value, basis
+
+
+def write_elasticity_sensitivity(
+    cfg: dict, model: Model, network: dict, coc_pct: float, scenarios: pd.DataFrame
+) -> pd.DataFrame:
+    """The scenario grid with utilisation responding to the fee rate.
+
+    Everywhere else in this repository u is held independent of ppm, which is
+    perfectly inelastic demand for forwarding — and that assumption is exactly
+    what makes a higher fee rate look unambiguously better. Here
+
+        u(ppm) = u0 * (ppm / ppm_ref) ** (-epsilon)
+
+    so raising the fee rate costs volume. epsilon = 0 collapses to the inelastic
+    case and must reproduce table3_scenarios.csv exactly; that identity is
+    asserted below rather than assumed, the same way break-even is checked.
+    """
+    u0 = float(cfg["model"]["baseline"]["utilization"])
+    ppm_ref, ppm_ref_basis = resolve_ppm_ref(cfg, network)
+    epsilons = [float(e) for e in cfg["elasticity"]["epsilon_list"]]
+    if not epsilons:
+        raise FetchError("elasticity.epsilon_list is empty")
+
+    rows = []
+    for epsilon in epsilons:
+        for capacity, ppm in scenario_grid(cfg):
+            u = u0 * (ppm / ppm_ref) ** (-epsilon)
+            terms = model.terms(capacity, ppm, u)
+            rows.append(
+                {
+                    "epsilon": epsilon,
+                    "node_capacity_btc": capacity,
+                    "ppm": ppm,
+                    "ppm_ref": ppm_ref,
+                    "u0": u0,
+                    "utilization": round(u, 6),
+                    "f_earned_sat": round(terms["f_earned_sat"], 0),
+                    "net_income_sat": round(terms["net_income_sat"], 0),
+                    "apy_routing_pct": round(terms["apy_routing_pct"], 4),
+                    "cost_of_capital_annual_pct": round(coc_pct, 4),
+                    "clears_benchmark": bool(terms["apy_routing_pct"] >= coc_pct),
+                }
+            )
+
+    frame = pd.DataFrame(rows)
+
+    # epsilon = 0 is the inelastic case, so it must land on table3 exactly. If
+    # it ever does not, one of the two paths has drifted and neither can be
+    # trusted — fail rather than publish two disagreeing tables.
+    inelastic = frame[frame["epsilon"] == 0.0]
+    if not inelastic.empty:
+        baseline = scenarios.set_index(["node_capacity_btc", "ppm"])["apy_routing_pct"]
+        for _, row in inelastic.iterrows():
+            key = (row["node_capacity_btc"], row["ppm"])
+            if key not in baseline.index:
+                raise FetchError(
+                    f"elasticity grid has a scenario {key} that table3 does not"
+                )
+            expected = float(baseline.loc[key])
+            if abs(float(row["apy_routing_pct"]) - expected) > 1e-9:
+                raise FetchError(
+                    f"epsilon = 0 does not reproduce table3 at {key}: "
+                    f"elasticity says {row['apy_routing_pct']}%, table3 says "
+                    f"{expected}%. The two paths have drifted apart."
+                )
+        if abs(float(inelastic["utilization"].iloc[0]) - u0) > 1e-12:
+            raise FetchError(
+                "epsilon = 0 changed the utilisation; the curve is misspecified"
+            )
+
+    frame.attrs["ppm_ref_basis"] = ppm_ref_basis
+    frame.to_csv(DERIVED_DIR / "elasticity_sensitivity.csv", index=False)
     return frame
 
 
@@ -1181,6 +1275,155 @@ def write_figure(cfg: dict, model: Model, coc_source: str, coc_pct: float) -> No
 
 
 # --------------------------------------------------------------------------
+# generated README blocks
+# --------------------------------------------------------------------------
+#
+# The snapshot has moved under the README three times already, leaving
+# hand-typed figures behind. Facts that change with the snapshot are generated
+# here and injected between markers; the interpretation around them is written
+# by hand and is never touched by the build.
+
+def _ppm_label(ppm: float, network: dict, distribution: dict) -> str:
+    if abs(ppm - float(network["med_fee_rate"])) < 0.5:
+        return "network median"
+    p50 = distribution["percentiles"].get(50)
+    if p50 and abs(ppm - float(p50["value"])) < 1.0:
+        return "ranked-node median"
+    # Anything that is not one of the snapshot's observed medians is a fee
+    # policy the author chose. Saying so in the table is the point: it shows at
+    # a glance whether the scenarios that clear the benchmark are observed ones.
+    return "assumption"
+
+
+def _headline_markdown(
+    cfg: dict,
+    model: Model,
+    network: dict,
+    distribution: dict,
+    scenarios: pd.DataFrame,
+    onchain: pd.DataFrame,
+    elasticity: pd.DataFrame,
+    coc_source: str,
+    coc_pct: float,
+    orders: dict,
+    snapshot_date: str,
+) -> str:
+    u = float(cfg["model"]["baseline"]["utilization"])
+    lines = [
+        f"Snapshot `{snapshot_date}`. Benchmark **{coc_pct:.2f} %/yr** "
+        f"(`{coc_source}`, n={orders['n']}) — the median annualised rate on "
+        "executed Magma leases, i.e. the observed price of renting the same "
+        "liquidity. Baseline utilisation `u = "
+        f"{u:.2f}`, on-chain fees at the observed {model.sat_per_vb:g} sat/vB.",
+        "",
+        "| Capacity | ppm | APY | vs benchmark | break-even `u*` | reachable at `u ≤ 1` |",
+        "|---:|---:|---:|---:|---:|:--|",
+    ]
+    for _, row in scenarios.iterrows():
+        label = _ppm_label(row["ppm"], network, distribution)
+        ppm_cell = f"{row['ppm']:.0f}" + (f" ({label})" if label else "")
+        gap = row["apy_routing_pct"] - coc_pct
+        clears = row["apy_routing_pct"] >= coc_pct
+        apy_cell = f"{row['apy_routing_pct']:+.2f} %"
+        gap_cell = f"{gap:+.2f} pp"
+        if clears:
+            apy_cell, gap_cell = f"**{apy_cell}**", f"**{gap_cell}**"
+        reachable = row["break_even_attainable"]
+        reach_cell = "yes" if reachable in (True, "True") else "**no**"
+        lines.append(
+            f"| {row['node_capacity_btc']:g} BTC | {ppm_cell} | {apy_cell} | "
+            f"{gap_cell} | {float(row['break_even_u']):.2f} | {reach_cell} |"
+        )
+
+    cleared = int((scenarios["apy_routing_pct"] >= coc_pct).sum())
+    opex_sat = float(scenarios["opex_sat"].iloc[0])
+    smallest = float(scenarios["node_capacity_btc"].min())
+    opex_share = opex_sat / (smallest * SAT_PER_BTC) * 100.0
+
+    lines += [
+        "",
+        f"**{cleared} of {len(scenarios)}** scenarios clear the benchmark at "
+        f"`u = {u:.2f}`. Fixed OPEX of "
+        f"${model.opex_usd_per_year:,.0f}/yr is {opex_sat:,.0f} sat at the "
+        f"snapshot rate, which is **{opex_share:.1f} %** of a {smallest:g} BTC "
+        f"node's capital ({opex_sat:,.0f} / {smallest * SAT_PER_BTC:,.0f} sat).",
+        "",
+        "### Under a busier fee market",
+        "",
+        "| ppm | "
+        + " | ".join(
+            f"{level:g} sat/vB ({onchain.loc[onchain.sat_per_vb == level, 'basis'].iloc[0]})"
+            for level in sorted(onchain["sat_per_vb"].unique())
+        )
+        + " |",
+        "|---:|" + "---:|" * onchain["sat_per_vb"].nunique(),
+    ]
+    levels = sorted(onchain["sat_per_vb"].unique())
+    for ppm in sorted(onchain["ppm"].unique()):
+        cells = []
+        for level in levels:
+            sub = onchain[(onchain.ppm == ppm) & (onchain.sat_per_vb == level)]
+            best = sub.loc[sub["node_capacity_btc"].idxmax()]
+            cells.append(f"{best['apy_routing_pct']:+.2f} %")
+        lines.append(f"| {ppm:.0f} | " + " | ".join(cells) + " |")
+    lines.append("")
+    lines.append(
+        f"(best case at each fee level: the "
+        f"{onchain['node_capacity_btc'].max():g} BTC node.) Scenarios clearing "
+        "the benchmark, by fee level: "
+        + ", ".join(
+            f"**{int(onchain[(onchain.sat_per_vb == level)]['clears_benchmark'].sum())}"
+            f"/{len(onchain[onchain.sat_per_vb == level])}** at {level:g} sat/vB"
+            for level in levels
+        )
+        + "."
+    )
+
+    lines += [
+        "",
+        "### If demand responds to price",
+        "",
+        f"`u(ppm) = u0 · (ppm / {elasticity['ppm_ref'].iloc[0]:.0f})^(−ε)`, "
+        f"`u0 = {float(elasticity['u0'].iloc[0]):.2f}`. ε = 0 is the inelastic "
+        "case used everywhere above.",
+        "",
+        "| ε | scenarios clearing benchmark | best APY | at |",
+        "|---:|---:|---:|:--|",
+    ]
+    for epsilon in sorted(elasticity["epsilon"].unique()):
+        sub = elasticity[elasticity.epsilon == epsilon]
+        best = sub.loc[sub["apy_routing_pct"].idxmax()]
+        lines.append(
+            f"| {epsilon:g} | {int(sub['clears_benchmark'].sum())}/{len(sub)} | "
+            f"{best['apy_routing_pct']:+.2f} % | "
+            f"{best['node_capacity_btc']:g} BTC / {best['ppm']:.0f} ppm |"
+        )
+
+    return "\n".join(lines)
+
+
+def update_readme_blocks(blocks: dict) -> list[str]:
+    """Replace every `<!-- BEGIN generated: name -->` region in README.md."""
+    path = REPO_ROOT / "README.md"
+    if not path.exists():
+        return []
+
+    text = path.read_text(encoding="utf-8")
+    updated = []
+    for name, body in blocks.items():
+        begin = f"<!-- BEGIN generated: {name} -->"
+        end = f"<!-- END generated: {name} -->"
+        pattern = re.compile(re.escape(begin) + ".*?" + re.escape(end), re.DOTALL)
+        # A function replacement, so backslashes in the body are never read as
+        # regex escapes.
+        text, count = pattern.subn(lambda _m: f"{begin}\n{body.strip()}\n{end}", text)
+        if count:
+            updated.append(f"{name}x{count}")
+    path.write_text(text, encoding="utf-8")
+    return updated
+
+
+# --------------------------------------------------------------------------
 
 def main() -> int:
     cfg = load_config()
@@ -1205,6 +1448,7 @@ def main() -> int:
     coc_source, coc_pct = resolve_cost_of_capital(cfg, table2)
     table3 = write_scenarios(cfg, model, coc_pct)
     onchain = write_onchain_sensitivity(cfg, model, fees, coc_pct)
+    elasticity = write_elasticity_sensitivity(cfg, model, network, coc_pct, table3)
     sensitivity = write_sensitivity(cfg, model, coc_source, coc_pct)
 
     print("[build_tables] writing figure")
@@ -1224,6 +1468,12 @@ def main() -> int:
             float(level) for level in cfg["onchain_sensitivity"]["sat_per_vb_levels"]
         ],
         "scenario_ppm_list": [float(x) for x in cfg["model"]["scenarios"]["ppm_list"]],
+        "elasticity": {
+            "epsilon_list": [float(e) for e in cfg["elasticity"]["epsilon_list"]],
+            "ppm_ref": float(elasticity["ppm_ref"].iloc[0]),
+            "ppm_ref_basis": elasticity.attrs.get("ppm_ref_basis", ""),
+            "u0": float(elasticity["u0"].iloc[0]),
+        },
         "btc_usd": model.btc_usd,
         "fee_distribution": {
             "side": distribution["side"],
@@ -1237,6 +1487,26 @@ def main() -> int:
     (DERIVED_DIR / "_sources.json").write_text(
         json.dumps(provenance, indent=2) + "\n", encoding="utf-8"
     )
+
+    snapshot_date = _date_only(max(rec["fetched_at_utc"] for rec in SOURCES))
+    window_from = min(rec["fetched_at_utc"] for rec in SOURCES)
+    window_to = max(rec["fetched_at_utc"] for rec in SOURCES)
+    injected = update_readme_blocks(
+        {
+            "snapshot": (
+                f"**Snapshot `{snapshot_date}`** (ISO 8601; the files this build "
+                f"used were collected `{window_from}` – `{window_to}`). The "
+                "mempool.space network totals inside it carry their own row "
+                f"date, `{_date_only(network['data_as_of_utc'])}`."
+            ),
+            "headline": _headline_markdown(
+                cfg, model, network, distribution, table3, onchain, elasticity,
+                coc_source, coc_pct, orders, snapshot_date,
+            ),
+        }
+    )
+    if injected:
+        print(f"  refreshed README blocks: {', '.join(injected)}")
 
     print()
     print(f"  network       : {network['channel_count']:,} channels, "
@@ -1269,6 +1539,13 @@ def main() -> int:
         values="apy_routing_pct",
     )
     print(pivot.to_string())
+
+    print()
+    print("  elasticity (scenarios clearing the benchmark):")
+    for epsilon in sorted(elasticity["epsilon"].unique()):
+        sub = elasticity[elasticity.epsilon == epsilon]
+        print(f"    epsilon = {epsilon:<4g} {int(sub['clears_benchmark'].sum())}"
+              f"/{len(sub)}   best APY {sub['apy_routing_pct'].max():+.2f}%")
 
     print()
     for ppm in sorted(sensitivity["ppm"].unique()):
