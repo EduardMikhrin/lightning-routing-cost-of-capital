@@ -1,0 +1,16 @@
+metric,value,unit,source,data_as_of_utc,snapshot_fetched_at_utc
+total_capacity_btc,3794.42797509,BTC,mempool.space lightning/statistics/latest,2026-08-30T00:00:00.000Z,2026-09-13T10:19:36Z
+total_capacity_sat,379442797509.0,sat,mempool.space lightning/statistics/latest,2026-08-30T00:00:00.000Z,2026-09-13T10:19:36Z
+node_count,16237.0,nodes,mempool.space lightning/statistics/latest,2026-08-30T00:00:00.000Z,2026-09-13T10:19:36Z
+channel_count,32676.0,channels,mempool.space lightning/statistics/latest,2026-08-30T00:00:00.000Z,2026-09-13T10:19:36Z
+avg_channel_capacity_sat,11612278.0,sat,mempool.space lightning/statistics/latest,2026-08-30T00:00:00.000Z,2026-09-13T10:19:36Z
+med_channel_capacity_sat,2035000.0,sat,mempool.space lightning/statistics/latest,2026-08-30T00:00:00.000Z,2026-09-13T10:19:36Z
+avg_fee_rate_ppm,824.0,ppm,mempool.space lightning/statistics/latest,2026-08-30T00:00:00.000Z,2026-09-13T10:19:36Z
+med_fee_rate_ppm,100.0,ppm,mempool.space lightning/statistics/latest,2026-08-30T00:00:00.000Z,2026-09-13T10:19:36Z
+avg_base_fee_msat,903.0,msat,mempool.space lightning/statistics/latest,2026-08-30T00:00:00.000Z,2026-09-13T10:19:36Z
+med_base_fee_msat,500.0,msat,mempool.space lightning/statistics/latest,2026-08-30T00:00:00.000Z,2026-09-13T10:19:36Z
+tor_nodes,7981.0,nodes,mempool.space lightning/statistics/latest,2026-08-30T00:00:00.000Z,2026-09-13T10:19:36Z
+clearnet_nodes,4595.0,nodes,mempool.space lightning/statistics/latest,2026-08-30T00:00:00.000Z,2026-09-13T10:19:36Z
+onchain_fee_halfHourFee_sat_per_vb,1.0,sat/vB,mempool.space fees_recommended,2026-08-30T00:00:00.000Z,2026-09-13T10:19:36Z
+btc_usd,76773.0,USD,CoinGecko simple/price,2026-08-30T00:00:00.000Z,2026-09-13T10:19:36Z
+btc_uah,3414957.0,UAH,CoinGecko simple/price,2026-08-30T00:00:00.000Z,2026-09-13T10:19:36Z

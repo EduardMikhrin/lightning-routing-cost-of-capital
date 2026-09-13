@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use this dataset or these scripts, please cite them as below."
+title: "Lightning routing cost of capital: dataset and collection scripts"
+version: "1.0"
+type: dataset
+date-released: 2026-09-13
+authors:
+  - family-names: Mikhrin
+    given-names: Eduard
+    orcid: "https://orcid.org/0009-0002-6104-4368"
+    affiliation: 'National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic Institute", Kyiv, Ukraine'
+license:
+  - MIT
+  - CC-BY-4.0
+abstract: >-
+  Reproducible snapshot dataset and collection scripts for an assessment of a
+  Lightning Network routing node as an investment. Raw responses from the
+  mempool.space, Amboss and CoinGecko public APIs are stored verbatim with UTC
+  timestamps and SHA-256 hashes, and the derived tables — cost of capital,
+  node-size scenarios and an APY sensitivity grid — are rebuilt from them by a
+  single command. Snapshot of 2026-09-13.
+keywords:
+  - Lightning Network
+  - Bitcoin
+  - payment channels
+  - routing node
+  - cost of capital
+  - liquidity market
+  - reproducible research
+# Fill in once the repository is published:
+# repository-code: "https://github.com/<owner>/lightning-channels-capital"
+# url: "https://github.com/<owner>/lightning-channels-capital"

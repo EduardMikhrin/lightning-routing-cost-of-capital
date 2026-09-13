@@ -1,0 +1,6 @@
+requests>=2.32
+PyYAML>=6.0
+python-dotenv>=1.0
+pandas>=2.2
+numpy>=2.0
+matplotlib>=3.9

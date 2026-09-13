@@ -1,0 +1,137 @@
+# Every model parameter lives here. Nothing that drives a published number is
+# hard-coded in the scripts.
+#
+# Two kinds of values appear below:
+#   OBSERVED   - overwritten at build time by the raw snapshot (never set here).
+#   ASSUMPTION - chosen by the author; must be defended in the paper's text.
+# Assumptions are marked. Do not silently promote an assumption to an observation.
+
+http:
+  # Public APIs expect an identifiable client. Put a real contact address here
+  # before running: an anonymous scraper is the first thing a rate limiter drops.
+  user_agent: "lightning-channels-capital/0.1 (academic research; contact: set-me@example.org)"
+  timeout_seconds: 30
+  retries: 3
+  backoff_base_seconds: 1.5          # delay = base ** attempt
+  pause_between_requests_seconds: 1.2
+
+sources:
+  mempool:
+    base_url: "https://mempool.space"
+    # Documented intervals for /api/v1/lightning/statistics/:interval are
+    # latest | 24h | 3d | 1w | 1m | 3m | 6m | 1y | 2y | 3y
+    # (https://mempool.space/docs/api/rest). 3y is therefore the longest
+    # history the documented API contract offers, and fetch_mempool.py rejects
+    # anything outside that list rather than probing undocumented values.
+    history_interval: "3y"
+
+  amboss:
+    # Space schema; also serves the Magma market-metrics queries.
+    endpoint: "https://api.amboss.space/graphql"
+    # Node universe for the ppm distribution: the capacity rank list.
+    # getRankLists returns only the top 20 pubkeys per list, so 20 is the
+    # ceiling here, not a sampling choice. See README.
+    top_nodes_for_fee_distribution: 20
+    orders_from: "2025-01-01"        # executed Magma leases from this date
+    lnr_from: "2023-01-01"
+    lnr_period: "MONTHLY"            # ALL | ANNUALLY | DAILY | MONTHLY | WEEKLY
+    # Per-operation authentication. Observed 2026-09-13 on a free-tier key:
+    # sending Authorization on the two `from:`-windowed queries makes the API
+    # answer "Cannot query data older than 7 days", while the anonymous path
+    # returns the full history. The other operations are byte-identical either
+    # way. So the key is deliberately NOT sent for those two. If your account
+    # has a paid tier that lifts the window, flip them to true.
+    authenticate:
+      magma_offers: true
+      magma_order_details: false
+      magma_lnr_curve_buckets: false
+      magma_lnr_series: false
+      rank_lists: true
+      node_fee_buckets: true
+
+  coingecko:
+    base_url: "https://api.coingecko.com"
+    coin_id: "bitcoin"
+    vs_currencies: ["usd", "uah"]
+
+model:
+  blocks_per_year: 52560             # 144 blocks/day * 365 days; also Amboss's
+                                     # LNR annualisation base.
+  days_per_year: 365
+
+  baseline:                          # ASSUMPTION - the paper's central case
+    capacity_btc: 1.0
+    ppm: 500
+    utilization: 0.15                # u = daily turnover / locked capital
+
+  scenarios:
+    capacities_btc: [0.1, 1.0, 10.0]
+
+  # r_reb: rebalancing outlay as a share of gross routing revenue. ASSUMPTION.
+  rebalancing_share_of_earned: 0.30
+
+  channel:
+    lifetime_months: 18              # L, amortisation horizon. ASSUMPTION.
+    # null -> use the median channel capacity from the mempool.space snapshot.
+    # Set a number (BTC) to override with an explicit assumption instead.
+    size_btc: null
+    # Virtual sizes of the funding and cooperative-close transactions.
+    # ASSUMPTION: 1-in-2-out P2WPKH -> P2WSH funding, 1-in-2-out mutual close.
+    open_vbytes: 154
+    close_vbytes: 166
+    # Which snapshot the on-chain cost is priced from:
+    #   fees_recommended -> /api/v1/fees/recommended (integer sat/vB)
+    #   fees_precise     -> /api/v1/fees/precise     (down to 0.1 sat/vB)
+    # Both carry the same five tier keys. `recommended` is the headline series;
+    # `precise` matters in a near-empty mempool, where `recommended` rounds
+    # every tier up to 1 sat/vB.
+    fee_source: "fees_recommended"
+    fee_tier: "halfHourFee"          # fastestFee|halfHourFee|hourFee|economyFee|minimumFee
+
+  # Annual operating cost in USD; converted to BTC at the snapshot rate.
+  # ASSUMPTION: node hosting + monitoring. Defend this figure in the text.
+  opex_usd_per_year: 300
+
+cost_of_capital:
+  # Which row of table2 the break-even calculation is measured against.
+  # Must match a `source` value emitted into table2_cost_of_capital.csv.
+  reference_source: "magma_orders_median"
+  # ASSUMPTION: return forgone on self-funded BTC. 0.0 = BTC held idle anyway.
+  own_btc_opportunity_annual_pct: 0.0
+
+magma:
+  # Notional channel size at which open offers are annualised, so that the
+  # fixed base_fee component is priced against a consistent denominator.
+  # Clamped into each offer's own [min_size, max_size].
+  reference_channel_size_sat: 5000000
+  offer_status_filter: ["ENABLED"]
+  offer_side_filter: ["SELL"]
+  offer_type_filter: ["CHANNEL"]
+  # Executed-order statuses counted as realised market transactions.
+  order_status_filter: ["FINISHED", "FINISHED_EARLY"]
+  # Executed orders whose size falls outside this range are excluded from the
+  # observed-rate statistics. null disables the bound.
+  orders_min_size_sat: null
+  orders_max_size_sat: null
+
+fee_distribution:
+  # Amboss exposes outbound fee rates as a per-node histogram, not as raw
+  # per-channel values, so percentiles are interpolated inside the containing
+  # bucket. `local_buckets` = the node's own outbound policies.
+  side: "local"                      # local | remote
+  weight_by: "channels"              # channels | capacity
+  percentiles: [25, 50, 75, 90]
+
+sensitivity:
+  utilization_min: 0.0
+  utilization_max: 1.0
+  utilization_step: 0.05
+  ppm_list: [100, 250, 500, 1000, 2000]
+
+figure:
+  ppm_curves: [100, 500, 1000, 2000]
+  width_cm: 16.0                     # A4 text block with ~2.5 cm margins
+  height_cm: 10.0
+  dpi: 300
+  font_family: "serif"
+  base_font_pt: 9

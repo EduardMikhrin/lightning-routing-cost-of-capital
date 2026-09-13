@@ -1,0 +1,9 @@
+metric,value,exact,basis,snapshot_date,note
+p25_fee_rate_ppm,106.96,True,"Amboss local_buckets over 17 of 20 ranked nodes, weighted by channels (n=6574), interpolated within the containing bucket",2026-09-13,
+p50_fee_rate_ppm,463.79,True,"Amboss local_buckets over 17 of 20 ranked nodes, weighted by channels (n=6574), interpolated within the containing bucket",2026-09-13,
+p75_fee_rate_ppm,919.69,True,"Amboss local_buckets over 17 of 20 ranked nodes, weighted by channels (n=6574), interpolated within the containing bucket",2026-09-13,
+p90_fee_rate_ppm,1839.19,True,"Amboss local_buckets over 17 of 20 ranked nodes, weighted by channels (n=6574), interpolated within the containing bucket",2026-09-13,
+nodes_in_distribution,17.0,True,"Amboss local_buckets over 17 of 20 ranked nodes, weighted by channels (n=6574), interpolated within the containing bucket",2026-09-13,3 of 20 ranked nodes returned an empty local_buckets array and contribute nothing; their pubkeys are listed in _sources.json.
+channels_in_distribution,6574.0,True,"Amboss local_buckets over 17 of 20 ranked nodes, weighted by channels (n=6574), interpolated within the containing bucket",2026-09-13,"total histogram weight, weighted by channels"
+network_med_fee_rate_ppm,100.0,True,mempool.space lightning/statistics/latest med_fee_rate (all announced channels),2026-08-30,
+network_avg_fee_rate_ppm,824.0,True,mempool.space lightning/statistics/latest avg_fee_rate (all announced channels),2026-08-30,

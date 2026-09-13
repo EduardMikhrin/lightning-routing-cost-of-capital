@@ -1,0 +1,4 @@
+node_capacity_btc,ppm,utilization,f_earned_sat,f_rebalancing_sat,onchain_amortized_sat,opex_sat,net_income_sat,apy_routing_pct
+0.1,500.0,0.15,273750.0,82125.0,1048.0,390762.0,-200186.0,-2.0019
+1.0,500.0,0.15,2737500.0,821250.0,10483.0,390762.0,1515004.0,1.515
+10.0,500.0,0.15,27375000.0,8212500.0,104832.0,390762.0,18666906.0,1.8667
