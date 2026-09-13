@@ -1,0 +1,9 @@
+metric,mempool_space_value,mempool_space_as_of_utc,amboss_value,amboss_as_of_utc,amboss_minus_mempool_pct,note
+channel_count,32674.0,2026-08-30T00:00:00Z,36216.0,2026-09-13T15:47:38Z,10.84,
+total_capacity_btc,3794.5151656,2026-08-30T00:00:00Z,3722.31912498,2026-09-13T15:47:38Z,-1.903,
+avg_channel_capacity_sat,11613256.0,2026-08-30T00:00:00Z,10278106.706925116,2026-09-13T15:47:38Z,-11.497,
+med_channel_capacity_sat,2042066.0,2026-08-30T00:00:00Z,2000000.0,2026-09-13T15:47:38Z,-2.06,feeds the model's channel size via model.channel.size_btc = null
+med_fee_rate_ppm,100.0,2026-08-30T00:00:00Z,50.0,2026-09-13T15:47:38Z,-50.0,one of the scenario fee rates is taken from the mempool.space figure
+med_base_fee_msat,500.0,2026-08-30T00:00:00Z,1000.0,2026-09-13T15:47:38Z,100.0,
+node_count_active,16237.0,2026-08-30T00:00:00Z,13733.0,2026-09-13T15:47:38Z,-15.422,NOT like-for-like: mempool.space node_count against Amboss nodes.active; neither source documents its activity criterion
+node_count_all_time,,2026-08-30T00:00:00Z,57490.0,2026-09-13T15:47:38Z,,"Amboss only: cumulative node count, no mempool.space counterpart"

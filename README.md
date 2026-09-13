@@ -97,17 +97,93 @@ any target.
 |---|---|---|---|
 | mempool.space | `GET /api/v1/fees/recommended` | on-chain fee tiers, integer sat/vB | Rounds up: in a near-empty mempool every tier reads `1`. |
 | mempool.space | `GET /api/v1/fees/precise` | same tiers down to 0.1 sat/vB | Captured for sensitivity. Switch with `model.channel.fee_source`. |
-| mempool.space | `GET /api/v1/lightning/statistics/latest` | total capacity, node and channel counts, avg/median channel capacity, avg/median fee rate (ppm) and base fee (msat) | The row's own `added` date lags the fetch by up to ~2 weeks. `build_tables.py` reports it as `data_as_of_utc`; cite that, not the fetch time. |
-| mempool.space | `GET /api/v1/lightning/statistics/3y` | historical series for the dynamics section | **The fee fields do not exist on the historical endpoint** — only `channel_count`, `total_capacity` and the node counts. mempool.space therefore publishes **no historical ppm or base-fee series at all**; there is no substitute endpoint. Documented intervals stop at `3y` (`latest\|24h\|3d\|1w\|1m\|3m\|6m\|1y\|2y\|3y`), so 3 years is the longest history the published contract offers. `fetch_mempool.py` rejects any other value rather than probing undocumented ones. |
+| mempool.space | `GET /api/v1/lightning/statistics/latest` | total capacity, node and channel counts, avg/median channel capacity, avg/median fee rate (ppm) and base fee (msat) | **The Lightning index appears stalled, not lagging** — see [Indexer state](#indexer-state-mempoolspace-lightning). The row's own `added` date is reported as `data_as_of_utc`; cite that, never the fetch time. The endpoint also returns different backend rows under the same date (same section). |
+| mempool.space | `GET /api/v1/lightning/statistics/3y` | historical series for the dynamics section | **The fee fields do not exist on the historical endpoint** — only `channel_count`, `total_capacity` and the node counts. mempool.space therefore publishes **no historical ppm or base-fee series at all**; there is no substitute endpoint. The series is daily and continuous through 2026-08-30, then stops; it has also held multi-day holes earlier in 2026 that later filled in. Documented intervals stop at `3y` (`latest\|24h\|3d\|1w\|1m\|3m\|6m\|1y\|2y\|3y`), so 3 years is the longest history the published contract offers. `fetch_mempool.py` rejects any other value rather than probing undocumented ones. |
 | mempool.space | `GET /api/v1/lightning/nodes/rankings` | headline top nodes by capacity and by channel count | Returns only ~6 entries per list. |
 | mempool.space | `GET /api/v1/lightning/nodes/rankings/liquidity` `.../connectivity` | top 100 by capacity and by channel count | Top 100 only; no full-network node dump is published. |
 | api.amboss.space | `getOffers(offerType: CHANNEL)` | live open channel-lease offers: `base_fee`, `fee_rate`, `min_size`, `max_size`, `min_block_length` — the ask side of the Magma market | Excludes `amboss_fee_rate` (the marketplace's own fee), whose unit is not documented, so the offer-side rate **understates the buyer's all-in cost**. Manual substitute: read the total price off a Magma checkout in the web UI and compare. |
 | api.amboss.space | `getMarketMetrics.order_details(from:)` | executed leases: `size`, `block_duration`, `lnr`, `status` — the trade side | Carries no explicit price field, only `lnr`. On a free-tier key the query answers *"Cannot query data older than 7 days"*; anonymously it returns the full window, so `sources.amboss.authenticate.magma_order_details: false` deliberately omits the header. Flip it to `true` if your tier lifts the window. |
 | api.amboss.space | `getMarketMetrics.lnr_series(from:, period:)` | Amboss's published aggregate LNR index | Same 7-day authenticated window as above; same config switch. |
 | api.amboss.space | `getMarketMetrics.lnr_curve_buckets` | rate term structure by channel-size bucket | Collected and stored; not yet consumed by a table. |
+| api.amboss.space | `getNetworkMetrics` | network-level totals (node counts, channel count, aggregate/median capacity, median fee rate and base fee) as an independent cross-check on mempool.space | Field shape confirmed by schema introspection; not in the published docs. **Carries no as-of timestamp** — the payload has a UUID but no date — so the fetch time is the only date available. Disagrees materially with mempool.space; see [Indexer state](#indexer-state-mempoolspace-lightning). |
 | api.amboss.space | `getRankLists` | the node universe for the fee-rate distribution | **Returns only the top 20 pubkeys per list.** That is the ceiling on the distribution's sample, not a sampling choice. |
 | api.amboss.space | `getNode(pubkey).graph_info.fee_buckets` | per-node histogram of outbound fee rates in ppm | **Amboss publishes fee rates only as a 25-bucket histogram**, never as raw per-channel ppm values, so percentiles are interpolated inside the containing bucket and the top bucket (`10000 – Infinity`) is open-ended. Of the 20 ranked nodes, 3 return an empty `local_buckets` array and contribute nothing; the effective sample is recorded in `ppm_distribution.csv` and the skipped pubkeys in `_sources.json`. |
 | api.coingecko.com | `GET /api/v3/simple/price` | BTC/USD and BTC/UAH at the snapshot instant | Spot only — the free plan's historical endpoints are not used, so a rebuild against an older raw file must use that file's own quote. |
+
+### Indexer state: mempool.space Lightning
+
+Investigated 2026-09-13 because the daily series stops 14 days before the fetch.
+**mempool.space documents no indexing schedule, publication lag or freshness
+guarantee for Lightning data anywhere** — not in the REST reference and not in
+the FAQ. What follows is therefore observation, not a documented behaviour, and
+this repository does not describe it as a "lag".
+
+What was observed:
+
+- `statistics/latest` returned `added = 2026-08-30` on **seven fetches spanning
+  09:56–15:34 UTC** on 2026-09-13. It never moved during that window.
+- `statistics/3y` is a daily series, continuous day-by-day through 2026-08-30
+  (previous point 2026-08-29), then nothing. A 14-day hole at the live end.
+- The same series holds earlier multi-day holes that later filled in —
+  2026-02-24 → 2026-03-09 (13 days), 2026-04-15 → 2026-04-22 (7 days), and
+  shorter ones. So the endpoint does not publish on a fixed offset from the
+  present; it publishes daily and sometimes stops.
+
+A stalled index and a long publication lag are not distinguishable from a single
+snapshot. The prior gaps, the day-by-day continuity right up to the cut, and the
+absence of any documented schedule together point at a **stalled index**, and
+that is how it is described here. It cannot be proven from one day's data, and
+this note should be re-checked on the next snapshot rather than assumed.
+
+**Second finding: the endpoint is not deterministic within a single instant.**
+Across those seven fetches the row dated `2026-08-30` came back with four
+different `id` values — 151022, 154152, 160567, 174478 — carrying different
+totals:
+
+| id | channels | nodes | total capacity | median channel capacity |
+|---:|---:|---:|---:|---:|
+| 151022 | 32,678 | 16,242 | 3795.48 BTC | 2,040,000 |
+| 154152 | 32,676 | 16,237 | 3794.43 BTC | 2,035,000 |
+| 160567 | 32,674 | 16,237 | 3794.52 BTC | 2,042,066 |
+| 174478 | 32,665 | 16,235 | 3793.83 BTC | 2,040,000 |
+
+The spread is small — 0.04 % on capacity and channel count — but it is not zero,
+and `med_capacity` feeds the model's channel size. Two runs of `make snapshot`
+minutes apart can therefore produce slightly different derived tables from the
+"same" dated row. This is why every raw response is hashed: the figures in the
+paper trace to one specific response, not to "what the endpoint says".
+
+**Third finding: an independent source disagrees materially.** `getNetworkMetrics`
+from Amboss was added specifically to cross-check this, and it does not settle
+the question — it measures a different universe. Full table:
+[`source_comparison.csv`](data/derived/source_comparison.csv).
+
+| Metric | mempool.space | Amboss | Amboss − mempool |
+|---|---:|---:|---:|
+| channel count | 32,674 | 36,216 | **+10.8 %** |
+| total capacity | 3,794.5 BTC | 3,722.3 BTC | −1.9 % |
+| median channel capacity | 2,042,066 sat | 2,000,000 sat | −2.1 % |
+| median fee rate | 100 ppm | 50 ppm | **−50 %** |
+| median base fee | 500 msat | 1,000 msat | **+100 %** |
+| node count (active) | 16,237 | 13,733 | −15.4 % |
+
+These are not reconcilable as staleness. A stale mempool.space index would show
+*fewer* channels and *less* capacity than a current source; instead it shows
+**more capacity across fewer channels**, so the two are counting different sets —
+plausibly differing on unannounced channels, on pruning of closed ones, or on
+what "active" means for a node. Neither source documents its inclusion criteria.
+
+Consequences for the paper, stated rather than resolved:
+
+- The median fee rate differs by a **factor of two** between sources, and the
+  scenario grid uses the mempool.space figure (100 ppm) as its "network median"
+  row. On Amboss's reading that row would be 50 ppm and the economics would be
+  worse, not better.
+- No network total in this repository should be quoted as *the* network total.
+  Quote the source, the figure and the date, all three.
+- This repository does not pick a winner. Both readings are published side by
+  side with their own as-of dates, and Amboss's aggregate carries no date of its
+  own at all.
 
 ### Not available from any source in this repository
 
@@ -163,6 +239,7 @@ on the cost-of-capital line, so the two cannot drift apart.
 | `data/derived/sensitivity.csv` | APY over the `u` × `ppm` grid, with `break_even_u` and a flag for whether it is reachable at `u ≤ 1`. |
 | `data/derived/ppm_distribution.csv` | outbound fee-rate percentiles plus the network-wide mempool.space comparison, and the sample-coverage rows. |
 | `data/derived/ppm_histogram.csv` | the merged bucket histogram the percentiles were interpolated from. |
+| `data/derived/source_comparison.csv` | mempool.space against Amboss on the same network totals, each with its own as-of date and the gap between them. Neither is treated as ground truth. |
 | `data/derived/network_snapshot.csv` | headline Lightning figures with units and `data_as_of_utc`. |
 | `data/derived/lightning_history.csv` | the 3-year series. |
 | `data/derived/_sources.json` | every raw file this build consumed, with hashes, plus the resolved model inputs. |
@@ -199,9 +276,9 @@ Snapshot `2026-09-13`. Benchmark **2.37 %/yr** (`magma_orders_median`, n=3265) �
 
 | Capacity | ppm | APY | vs benchmark | break-even `u*` | reachable at `u ≤ 1` |
 |---:|---:|---:|---:|---:|:--|
-| 0.1 BTC | 100 (network median) | -3.52 % | -5.89 pp | 2.46 | **no** |
-| 0.1 BTC | 464 (ranked-node median) | -2.13 % | -4.50 pp | 0.53 | yes |
-| 0.1 BTC | 1000 (assumption) | -0.07 % | -2.45 pp | 0.25 | yes |
+| 0.1 BTC | 100 (network median) | -3.52 % | -5.89 pp | 2.45 | **no** |
+| 0.1 BTC | 464 (ranked-node median) | -2.12 % | -4.49 pp | 0.53 | yes |
+| 0.1 BTC | 1000 (assumption) | -0.07 % | -2.44 pp | 0.25 | yes |
 | 1 BTC | 100 (network median) | -0.02 % | -2.39 pp | 1.08 | **no** |
 | 1 BTC | 464 (ranked-node median) | +1.38 % | -0.99 pp | 0.23 | yes |
 | 1 BTC | 1000 (assumption) | **+3.43 %** | **+1.06 pp** | 0.11 | yes |
@@ -209,7 +286,7 @@ Snapshot `2026-09-13`. Benchmark **2.37 %/yr** (`magma_orders_median`, n=3265) �
 | 10 BTC | 464 (ranked-node median) | +1.73 % | -0.64 pp | 0.20 | yes |
 | 10 BTC | 1000 (assumption) | **+3.78 %** | **+1.41 pp** | 0.09 | yes |
 
-**2 of 9** scenarios clear the benchmark at `u = 0.15`. Fixed OPEX of $300/yr is 389,570 sat at the snapshot rate, which is **3.9 %** of a 0.1 BTC node's capital (389,570 / 10,000,000 sat).
+**2 of 9** scenarios clear the benchmark at `u = 0.15`. Fixed OPEX of $300/yr is 388,908 sat at the snapshot rate, which is **3.9 %** of a 0.1 BTC node's capital (388,908 / 10,000,000 sat).
 
 ### Under a busier fee market
 
@@ -300,14 +377,14 @@ it does not.
 ## Snapshot
 
 <!-- BEGIN generated: snapshot -->
-**Snapshot `2026-09-13`** (ISO 8601; the files this build used were collected `2026-09-13T15:21:47Z` – `2026-09-13T15:22:20Z`). The mempool.space network totals inside it carry their own row date, `2026-08-30`.
+**Snapshot `2026-09-13`** (ISO 8601; the files this build used were collected `2026-09-13T15:47:16Z` – `2026-09-13T15:47:57Z`). The mempool.space network totals inside it carry their own row date, `2026-08-30`.
 <!-- END generated: snapshot -->
 
 `data/raw/manifest.jsonl` records the exact time and hash of every file ever
 collected; `data/derived/_sources.json` lists the subset the current tables were
 built from. The network-totals date above is mempool.space's own `added` field,
-and that is the one to cite for network figures — it lags collection by up to a
-fortnight.
+and that is the one to cite for network figures. It is not a collection date,
+and it was observed frozen — see [Indexer state](#indexer-state-mempoolspace-lightning).
 
 `data/raw/` also holds one `lightning_statistics_5y` file from an earlier run.
 `5y` is not a documented interval; the endpoint answered it, but the repository
@@ -327,7 +404,7 @@ raw snapshots are append-only — nothing in `data/derived/` is built from it.
 ## Reproducibility
 
 <!-- BEGIN generated: snapshot -->
-**Snapshot `2026-09-13`** (ISO 8601; the files this build used were collected `2026-09-13T15:21:47Z` – `2026-09-13T15:22:20Z`). The mempool.space network totals inside it carry their own row date, `2026-08-30`.
+**Snapshot `2026-09-13`** (ISO 8601; the files this build used were collected `2026-09-13T15:47:16Z` – `2026-09-13T15:47:57Z`). The mempool.space network totals inside it carry their own row date, `2026-08-30`.
 <!-- END generated: snapshot -->
 
 Requires Python 3.11+ and a network connection only for the second path below.

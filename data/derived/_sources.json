@@ -1,5 +1,5 @@
 {
-  "built_at_utc": "2026-09-13T15:22:54Z",
+  "built_at_utc": "2026-09-13T15:48:31Z",
   "config": "config.yaml",
   "cost_of_capital_source": "magma_orders_median",
   "cost_of_capital_annual_pct": 2.3715,
@@ -29,7 +29,7 @@
     "ppm_ref_basis": "mempool.space med_fee_rate (observed)",
     "u0": 0.15
   },
-  "btc_usd": 77008.0,
+  "btc_usd": 77139.0,
   "fee_distribution": {
     "side": "local",
     "weight_by": "channels",
@@ -39,71 +39,79 @@
       "037f990e61acee8a7697966afd29dd88f3b1f8a7b14d625c4f8742bd952003a590",
       "021c97a90a411ff2b10dc2a8e32de2f29d2fa49d41bfbb52bd416e460db0747d0d"
     ],
-    "total_weight": 6576.0
+    "total_weight": 6585.0
   },
   "inputs": [
     {
       "source": "mempool.space",
       "endpoint": "lightning_statistics_latest",
       "url": "https://mempool.space/api/v1/lightning/statistics/latest",
-      "fetched_at_utc": "2026-09-13T15:21:50Z",
-      "file": "data/raw/mempool.space_lightning_statistics_latest_2026-09-13T15-21-50Z.json",
+      "fetched_at_utc": "2026-09-13T15:47:18Z",
+      "file": "data/raw/mempool.space_lightning_statistics_latest_2026-09-13T15-47-18Z.json",
       "sha256": "3a9f6e1a4c9ef54391cd99802c75cc967105a5d27f647cd7cb85e6f50b0ece58"
     },
     {
       "source": "mempool.space",
       "endpoint": "lightning_statistics_3y",
       "url": "https://mempool.space/api/v1/lightning/statistics/3y",
-      "fetched_at_utc": "2026-09-13T15:21:51Z",
-      "file": "data/raw/mempool.space_lightning_statistics_3y_2026-09-13T15-21-51Z.json",
+      "fetched_at_utc": "2026-09-13T15:47:20Z",
+      "file": "data/raw/mempool.space_lightning_statistics_3y_2026-09-13T15-47-20Z.json",
       "sha256": "2003b9cdf5ebd80ccdca7698fe3fab5b79490dec8a0ee31e799d32f74122d16c"
     },
     {
       "source": "mempool.space",
       "endpoint": "fees_recommended",
       "url": "https://mempool.space/api/v1/fees/recommended",
-      "fetched_at_utc": "2026-09-13T15:21:47Z",
-      "file": "data/raw/mempool.space_fees_recommended_2026-09-13T15-21-47Z.json",
+      "fetched_at_utc": "2026-09-13T15:47:16Z",
+      "file": "data/raw/mempool.space_fees_recommended_2026-09-13T15-47-16Z.json",
       "sha256": "e94aef800d5d0a15a4f78a96d8fc4bc48d8c6c9f3a1b58ca1428d2fddf6f4774"
     },
     {
       "source": "api.coingecko.com",
       "endpoint": "simple_price",
       "url": "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd%2Cuah&include_last_updated_at=true",
-      "fetched_at_utc": "2026-09-13T15:21:57Z",
-      "file": "data/raw/api.coingecko.com_simple_price_2026-09-13T15-21-57Z.json",
-      "sha256": "5e82a1701b046ed3e867698a34e9e5b515e6f1ed161a8d6b6a4fd5b34afa05f7"
+      "fetched_at_utc": "2026-09-13T15:47:25Z",
+      "file": "data/raw/api.coingecko.com_simple_price_2026-09-13T15-47-25Z.json",
+      "sha256": "a94b32e6982fc0d69e8fd694dbdb28965369939f5c9516147d5f2292c108e659"
     },
     {
       "source": "api.amboss.space",
       "endpoint": "node_fee_buckets",
       "url": "https://api.amboss.space/graphql",
-      "fetched_at_utc": "2026-09-13T15:22:20Z",
-      "file": "data/raw/api.amboss.space_node_fee_buckets_2026-09-13T15-22-20Z.json",
-      "sha256": "66a167084378e4004efeb9c47ce8af0ad8468c0bd97c0a1c3a4d223e2c6455cc"
+      "fetched_at_utc": "2026-09-13T15:47:57Z",
+      "file": "data/raw/api.amboss.space_node_fee_buckets_2026-09-13T15-47-57Z.json",
+      "sha256": "f951c4bc4a93e2047027aadda6d6bac86c1ee45b37573823e7725cf965cada92"
+    },
+    {
+      "source": "api.amboss.space",
+      "endpoint": "network_metrics",
+      "url": "https://api.amboss.space/graphql",
+      "fetched_at_utc": "2026-09-13T15:47:38Z",
+      "file": "data/raw/api.amboss.space_network_metrics_2026-09-13T15-47-38Z.json",
+      "sha256": "9ece95e60e8b4575cb35c32ea7ecfc9e5a46ea5e21735ac1aef756d5e7a79330"
     },
     {
       "source": "api.amboss.space",
       "endpoint": "magma_offers",
       "url": "https://api.amboss.space/graphql",
-      "fetched_at_utc": "2026-09-13T15:21:58Z",
-      "file": "data/raw/api.amboss.space_magma_offers_2026-09-13T15-21-58Z.json",
-      "sha256": "700e0da6b9a5963771af4a9bbe3d63a3ed78e2204d7670eb2867b8cc8d6f20a7"
+      "fetched_at_utc": "2026-09-13T15:47:27Z",
+      "file": "data/raw/api.amboss.space_magma_offers_2026-09-13T15-47-27Z.json",
+      "sha256": "45459a6fb995262ccd5c4c3fcc2dea680fab10c13b7b69b19d324c4e7258bb6d"
     },
     {
       "source": "api.amboss.space",
       "endpoint": "magma_order_details",
       "url": "https://api.amboss.space/graphql",
-      "fetched_at_utc": "2026-09-13T15:22:01Z",
-      "file": "data/raw/api.amboss.space_magma_order_details_2026-09-13T15-22-01Z.json",
+      "fetched_at_utc": "2026-09-13T15:47:29Z",
+      "file": "data/raw/api.amboss.space_magma_order_details_2026-09-13T15-47-29Z.json",
       "sha256": "680df4316efbf5aa8e3c387962239625a987138e7f8d3674e5af4574441daa76"
     },
     {
       "source": "api.amboss.space",
       "endpoint": "magma_lnr_series",
       "url": "https://api.amboss.space/graphql",
-      "fetched_at_utc": "2026-09-13T15:22:17Z",
-      "file": "data/raw/api.amboss.space_magma_lnr_series_2026-09-13T15-22-17Z.json",
+      "fetched_at_utc": "2026-09-13T15:47:54Z",
+      "file": "data/raw/api.amboss.space_magma_lnr_series_2026-09-13T15-47-54Z.json",
       "sha256": "8ec1a24a598325db4fa83cbc0f662210f9b394c761361bed3daff8fb36c0629c"
     }
   ]

@@ -47,6 +47,7 @@ sources:
       magma_order_details: false
       magma_lnr_curve_buckets: false
       magma_lnr_series: false
+      network_metrics: true
       rank_lists: true
       node_fee_buckets: true
 

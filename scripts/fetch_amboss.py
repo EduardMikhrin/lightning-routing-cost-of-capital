@@ -27,6 +27,10 @@ Collected:
                                      the annualised rate (lnr)
   getMarketMetrics.lnr_curve_buckets rate term structure by channel-size bucket
   getMarketMetrics.lnr_series        aggregate market rate series
+  getNetworkMetrics                  network-level totals (node counts, channel
+                                     count, aggregate and median capacity, median
+                                     fee rate) as an independent cross-check on
+                                     mempool.space
   getRankLists                       node universe by capacity / channel count.
                                      NOTE: this query returns only the top 20
                                      pubkeys per list, which caps the node
@@ -122,6 +126,30 @@ query LnrSeries($from: String!, $period: LnrSearchPeriod!) {
       lnr_cost
       lnr_yield
       lny
+    }
+  }
+}
+"""
+
+# Field shape confirmed by GraphQL introspection against the live schema on
+# 2026-09-13 (getNetworkMetrics -> GeneralNetworkMetrics.historical_snapshots).
+# This is an INDEPENDENT reading of the same network totals mempool.space
+# publishes, collected so the two can be compared rather than trusted singly.
+# Note what is absent: the snapshot carries a UUID `id` but no as-of timestamp,
+# so Amboss publishes no date for these aggregates and the fetch time is the
+# only date available for them.
+Q_NETWORK_METRICS = """
+query NetworkMetrics {
+  getNetworkMetrics {
+    id
+    historical_snapshots {
+      id
+      nodes { total active }
+      channels {
+        channel_metrics { count sum mean median min max }
+        fee_rate_metrics { mean median }
+        base_fee_metrics { mean median }
+      }
     }
   }
 }
@@ -296,6 +324,7 @@ def main() -> int:
         api_key,
         variables={"from": str(amboss["orders_from"])},
     )
+    _fetch_and_store("network_metrics", Q_NETWORK_METRICS, cfg, api_key)
     _fetch_and_store("magma_lnr_curve_buckets", Q_LNR_CURVE_BUCKETS, cfg, api_key)
     _fetch_and_store(
         "magma_lnr_series",

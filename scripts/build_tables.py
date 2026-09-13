@@ -145,9 +145,10 @@ def load_network(cfg: dict) -> dict:
 
     return {
         "fetched_at_utc": record["fetched_at_utc"],
-        # `added` is the timestamp mempool.space assigns to the statistics row
-        # itself. It lags the fetch, and the paper must cite this date, not the
-        # moment the script happened to run.
+        # `added` is the date mempool.space assigns to the statistics row
+        # itself. It is NOT the collection time and must not be reported as one.
+        # As of 2026-09-13 it had been frozen at 2026-08-30 for 14 days; see the
+        # indexer note in the README before citing it.
         "data_as_of_utc": _normalise_iso(latest["added"]),
         **latest,
     }
@@ -453,6 +454,39 @@ def load_lnr_index(cfg: dict) -> dict:
     }
 
 
+def load_amboss_network(cfg: dict) -> dict:
+    """Amboss's own network-level totals, as an independent reading.
+
+    Amboss attaches no as-of timestamp to this aggregate — the payload carries a
+    UUID but no date — so the fetch time is the only date available for it, and
+    the comparison table says so rather than implying a measurement date.
+    """
+    payload, record = _load(AMBOSS, "network_metrics")
+    metrics = _require(
+        (payload.get("data") or {}).get("getNetworkMetrics"),
+        "getNetworkMetrics",
+    )
+    snapshot = _require(
+        metrics.get("historical_snapshots"), "getNetworkMetrics.historical_snapshots"
+    )
+    channels = _require(snapshot.get("channels"), "historical_snapshots.channels")
+    nodes = _require(snapshot.get("nodes"), "historical_snapshots.nodes")
+    channel_metrics = _require(channels.get("channel_metrics"), "channel_metrics")
+
+    return {
+        "channel_count": float(_require(channel_metrics.get("count"), "channel count")),
+        "total_capacity": float(_require(channel_metrics.get("sum"), "capacity sum")),
+        "med_capacity": float(_require(channel_metrics.get("median"), "capacity median")),
+        "avg_capacity": float(_require(channel_metrics.get("mean"), "capacity mean")),
+        "nodes_total": float(_require(nodes.get("total"), "nodes.total")),
+        "nodes_active": float(_require(nodes.get("active"), "nodes.active")),
+        "med_fee_rate": float((channels.get("fee_rate_metrics") or {}).get("median")),
+        "med_base_fee": float((channels.get("base_fee_metrics") or {}).get("median")),
+        "fetched_at_utc": record["fetched_at_utc"],
+        "snapshot_id": snapshot.get("id"),
+    }
+
+
 # --------------------------------------------------------------------------
 # the model
 # --------------------------------------------------------------------------
@@ -581,8 +615,9 @@ def write_network_snapshot(
 
     The three sources in this table were observed at different moments and must
     not share one date. The mempool.space statistics row carries `added`, the
-    date mempool.space assigned to the row, which lags collection by up to a
-    fortnight. The fee tiers are a live estimate with no timestamp of their own,
+    date mempool.space assigned to the row, which is not the collection time and
+    which was observed frozen 14 days behind it. The fee tiers are a live
+    estimate with no timestamp of their own,
     so they carry the moment they were fetched. The CoinGecko quote carries the
     exchange's own `last_updated_at`, which is what the price actually refers to.
     """
@@ -637,6 +672,81 @@ def write_network_snapshot(
     frame.to_csv(DERIVED_DIR / "network_snapshot.csv", index=False)
 
     history.to_csv(DERIVED_DIR / "lightning_history.csv", index=False)
+    return frame
+
+
+def write_source_comparison(network: dict, amboss: dict) -> pd.DataFrame:
+    """mempool.space against Amboss on the same network totals.
+
+    Neither source is treated as ground truth. Where they disagree the table
+    records both and the gap; picking a winner would hide the disagreement,
+    which is itself a finding about how firm any "network total" really is.
+    """
+    mempool_as_of = network["data_as_of_utc"]
+    # Amboss publishes no as-of date for this aggregate (see load_amboss_network).
+    amboss_as_of = amboss["fetched_at_utc"]
+
+    def row(metric, mempool_value, amboss_value, note=""):
+        if mempool_value and amboss_value:
+            diff = (amboss_value - mempool_value) / mempool_value * 100.0
+        else:
+            diff = None
+        return {
+            "metric": metric,
+            "mempool_space_value": mempool_value,
+            "mempool_space_as_of_utc": mempool_as_of,
+            "amboss_value": amboss_value,
+            "amboss_as_of_utc": amboss_as_of,
+            "amboss_minus_mempool_pct": None if diff is None else round(diff, 3),
+            "note": note,
+        }
+
+    rows = [
+        row("channel_count", float(network["channel_count"]), amboss["channel_count"]),
+        row(
+            "total_capacity_btc",
+            float(network["total_capacity"]) / SAT_PER_BTC,
+            amboss["total_capacity"] / SAT_PER_BTC,
+        ),
+        row(
+            "avg_channel_capacity_sat",
+            float(network["avg_capacity"]),
+            amboss["avg_capacity"],
+        ),
+        row(
+            "med_channel_capacity_sat",
+            float(network["med_capacity"]),
+            amboss["med_capacity"],
+            "feeds the model's channel size via model.channel.size_btc = null",
+        ),
+        row(
+            "med_fee_rate_ppm",
+            float(network["med_fee_rate"]),
+            amboss["med_fee_rate"],
+            "one of the scenario fee rates is taken from the mempool.space figure",
+        ),
+        row(
+            "med_base_fee_msat",
+            float(network["med_base_fee_mtokens"]),
+            amboss["med_base_fee"],
+        ),
+        row(
+            "node_count_active",
+            float(network["node_count"]),
+            amboss["nodes_active"],
+            "NOT like-for-like: mempool.space node_count against Amboss nodes.active; "
+            "neither source documents its activity criterion",
+        ),
+        row(
+            "node_count_all_time",
+            None,
+            amboss["nodes_total"],
+            "Amboss only: cumulative node count, no mempool.space counterpart",
+        ),
+    ]
+
+    frame = pd.DataFrame(rows)
+    frame.to_csv(DERIVED_DIR / "source_comparison.csv", index=False)
     return frame
 
 
@@ -1446,6 +1556,7 @@ def main() -> int:
     fees = load_fee_rate(cfg)
     price = load_price(cfg)
     distribution = load_fee_distribution(cfg)
+    amboss_network = load_amboss_network(cfg)
     offers = load_magma_offers(cfg)
     orders = load_magma_orders(cfg)
     index = load_lnr_index(cfg)
@@ -1455,6 +1566,7 @@ def main() -> int:
     print("[build_tables] writing derived tables")
     write_network_snapshot(network, fees, price, history)
     write_ppm_distribution(distribution, network)
+    comparison = write_source_comparison(network, amboss_network)
     table2 = write_cost_of_capital(cfg, offers, orders, index)
     coc_source, coc_pct = resolve_cost_of_capital(cfg, table2)
     table3 = write_scenarios(cfg, model, coc_pct)
@@ -1533,6 +1645,14 @@ def main() -> int:
     print(f"  ppm p50       : {distribution['percentiles'][50]['value']:.0f} "
           f"(top-{distribution['nodes_used']} nodes) vs "
           f"{network['med_fee_rate']} network-wide")
+    print()
+    print("  source comparison (Amboss vs mempool.space):")
+    for _, r in comparison.iterrows():
+        if pd.isna(r["amboss_minus_mempool_pct"]):
+            continue
+        print(f"    {r['metric']:28s} {r['mempool_space_value']:>15,.0f} vs "
+              f"{r['amboss_value']:>15,.0f}  {r['amboss_minus_mempool_pct']:+7.2f}%")
+
     print()
     print("  scenarios (u = %.2f, %s sat/vB observed):"
           % (float(cfg["model"]["baseline"]["utilization"]), model.sat_per_vb))
