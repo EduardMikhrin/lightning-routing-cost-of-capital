@@ -47,6 +47,18 @@ figures/               the figure, plus the CSV it was plotted from
    the bytes on disk. `build_tables.py` re-hashes each file before reading it and
    refuses to build if a byte changed, so a hand-edited snapshot can never reach
    a published table.
+
+   This turned out to be load-bearing rather than precautionary. On 2026-09-13
+   the `statistics/latest` row dated `2026-08-30` came back under **four
+   different backend `id` values across seven fetches in one afternoon**
+   (151022, 154152, 160567, 174478), carrying different totals — a spread of
+   0.04 % on capacity and channel count, and `med_capacity` ranging
+   2,035,000–2,042,066 sat, which feeds the model's channel size. **A rebuild
+   against a fresh fetch is therefore not guaranteed to reproduce a rebuild
+   against the stored response, even seconds later and even for the same dated
+   row.** The hash is what makes a published figure traceable to one specific
+   response rather than to "what the endpoint says". Detail under
+   [Indexer state](#indexer-state-mempoolspace-lightning).
 4. **All timestamps are ISO 8601 UTC.**
 
 ---
@@ -276,48 +288,65 @@ Snapshot `2026-09-13`. Benchmark **2.37 %/yr** (`magma_orders_median`, n=3265) �
 
 | Capacity | ppm | APY | vs benchmark | break-even `u*` | reachable at `u ≤ 1` |
 |---:|---:|---:|---:|---:|:--|
-| 0.1 BTC | 100 (network median) | -3.52 % | -5.89 pp | 2.45 | **no** |
-| 0.1 BTC | 464 (ranked-node median) | -2.12 % | -4.49 pp | 0.53 | yes |
+| 0.1 BTC | 50 (Amboss network median) | -3.71 % | -6.08 pp | 4.91 | **no** |
+| 0.1 BTC | 100 (mempool.space network median) | -3.52 % | -5.89 pp | 2.45 | **no** |
+| 0.1 BTC | 464 (Amboss ranked-node median) | -2.12 % | -4.49 pp | 0.53 | yes |
 | 0.1 BTC | 1000 (assumption) | -0.07 % | -2.44 pp | 0.25 | yes |
-| 1 BTC | 100 (network median) | -0.02 % | -2.39 pp | 1.08 | **no** |
-| 1 BTC | 464 (ranked-node median) | +1.38 % | -0.99 pp | 0.23 | yes |
+| 1 BTC | 50 (Amboss network median) | -0.21 % | -2.58 pp | 2.17 | **no** |
+| 1 BTC | 100 (mempool.space network median) | -0.02 % | -2.39 pp | 1.08 | **no** |
+| 1 BTC | 464 (Amboss ranked-node median) | +1.38 % | -0.99 pp | 0.23 | yes |
 | 1 BTC | 1000 (assumption) | **+3.43 %** | **+1.06 pp** | 0.11 | yes |
-| 10 BTC | 100 (network median) | +0.33 % | -2.04 pp | 0.95 | yes |
-| 10 BTC | 464 (ranked-node median) | +1.73 % | -0.64 pp | 0.20 | yes |
+| 10 BTC | 50 (Amboss network median) | +0.14 % | -2.23 pp | 1.89 | **no** |
+| 10 BTC | 100 (mempool.space network median) | +0.33 % | -2.04 pp | 0.95 | yes |
+| 10 BTC | 464 (Amboss ranked-node median) | +1.73 % | -0.64 pp | 0.20 | yes |
 | 10 BTC | 1000 (assumption) | **+3.78 %** | **+1.41 pp** | 0.09 | yes |
 
-**2 of 9** scenarios clear the benchmark at `u = 0.15`. Fixed OPEX of $300/yr is 388,908 sat at the snapshot rate, which is **3.9 %** of a 0.1 BTC node's capital (388,908 / 10,000,000 sat).
+Under each source's reading of the network median fee rate:
+
+- **Amboss network median** (50 ppm): **0 of 3** node sizes clear the benchmark (APY -3.71 % to +0.14 %).
+- **mempool.space network median** (100 ppm): **0 of 3** node sizes clear the benchmark (APY -3.52 % to +0.33 %).
+
+**2 of 12** scenarios clear the benchmark at `u = 0.15`. Fixed OPEX of $300/yr is 389,009 sat at the snapshot rate, which is **3.9 %** of a 0.1 BTC node's capital (389,009 / 10,000,000 sat).
 
 ### Under a busier fee market
 
 | ppm | 1 sat/vB (observed) | 50 sat/vB (stress) | 200 sat/vB (stress) |
 |---:|---:|---:|---:|
+| 50 | +0.14 % | -0.37 % | -1.94 % |
 | 100 | +0.33 % | -0.18 % | -1.75 % |
 | 464 | +1.73 % | +1.22 % | -0.35 % |
 | 1000 | +3.78 % | +3.27 % | +1.70 % |
 
-(best case at each fee level: the 10 BTC node.) Scenarios clearing the benchmark, by fee level: **2/9** at 1 sat/vB, **2/9** at 50 sat/vB, **0/9** at 200 sat/vB.
+(best case at each fee level: the 10 BTC node.) Scenarios clearing the benchmark, by fee level: **2/12** at 1 sat/vB, **2/12** at 50 sat/vB, **0/12** at 200 sat/vB.
 
 ### If demand responds to price
 
-`u(ppm) = u0 · (ppm / 100)^(−ε)` with `u0 = 0.15`, so gross revenue scales as `ppm^(1−ε)` and ε = 1 is the pivot. APY for the 10 BTC node, with the count over all 9 scenarios:
+`u(ppm) = u0 · (ppm / 100)^(−ε)` with `u0 = 0.15`, so gross revenue scales as `ppm^(1−ε)` and ε = 1 is the pivot. APY for the 10 BTC node, with the count over all 12 scenarios:
 
-| ε | 100 ppm | 464 ppm | 1000 ppm | clearing benchmark |
-|---:|---:|---:|---:|---:|
-| 0 | +0.33 % | +1.73 % | +3.78 % | 2/9 |
-| 0.5 | +0.33 % | +0.78 % | +1.16 % | 0/9 |
-| 1 | +0.33 % | +0.33 % | +0.33 % | 0/9 |
-| 1.5 | +0.33 % | +0.13 % | +0.07 % | 0/9 |
+| ε | 50 ppm | 100 ppm | 464 ppm | 1000 ppm | clearing benchmark |
+|---:|---:|---:|---:|---:|---:|
+| 0 | +0.14 % | +0.33 % | +1.73 % | +3.78 % | 2/12 |
+| 0.5 | +0.22 % | +0.33 % | +0.78 % | +1.16 % | 0/12 |
+| 1 | +0.33 % | +0.33 % | +0.33 % | +0.33 % | 0/12 |
+| 1.5 | +0.49 % | +0.33 % | +0.13 % | +0.07 % | 0/12 |
 <!-- END generated: headline -->
 
 ### What this means
 
 **The result is a fee-policy result, and it is fragile in three directions.**
 
-At both *observed* fee medians — the network median and the median across
-Amboss-ranked nodes — routing returns less than simply leasing the same capital
-out on Magma. Only an aggressive fee policy clears the benchmark, and only on the
-larger two node sizes.
+At every *observed* fee rate in the grid — both readings of the network median,
+and the median across Amboss-ranked nodes — routing returns less than simply
+leasing the same capital out on Magma, at every node size. The only scenarios
+that clear the benchmark sit at the 1000 ppm fee policy, which is an assumption,
+not an observation, and they clear only on the larger two node sizes.
+
+The two sources disagree on the network median by a factor of two, so the grid
+runs both rather than picking one (see
+[Indexer state](#indexer-state-mempoolspace-lightning)). Neither reading clears.
+The Amboss reading is the harsher of the two: at 50 ppm break-even utilisation
+exceeds 1.0 at *every* node size, so under that reading the benchmark is not
+merely missed but unreachable.
 
 *Fixed OPEX punishes small nodes.* The OPEX share above is computed from the
 `opex_sat` column against locked capital, so it moves with the BTC price rather
@@ -377,7 +406,7 @@ it does not.
 ## Snapshot
 
 <!-- BEGIN generated: snapshot -->
-**Snapshot `2026-09-13`** (ISO 8601; the files this build used were collected `2026-09-13T15:47:16Z` – `2026-09-13T15:47:57Z`). The mempool.space network totals inside it carry their own row date, `2026-08-30`.
+**Snapshot `2026-09-13`** (ISO 8601; the files this build used were collected `2026-09-13T15:54:45Z` – `2026-09-13T15:55:26Z`). The mempool.space network totals inside it carry their own row date, `2026-08-30`.
 <!-- END generated: snapshot -->
 
 `data/raw/manifest.jsonl` records the exact time and hash of every file ever
@@ -404,7 +433,7 @@ raw snapshots are append-only — nothing in `data/derived/` is built from it.
 ## Reproducibility
 
 <!-- BEGIN generated: snapshot -->
-**Snapshot `2026-09-13`** (ISO 8601; the files this build used were collected `2026-09-13T15:47:16Z` – `2026-09-13T15:47:57Z`). The mempool.space network totals inside it carry their own row date, `2026-08-30`.
+**Snapshot `2026-09-13`** (ISO 8601; the files this build used were collected `2026-09-13T15:54:45Z` – `2026-09-13T15:55:26Z`). The mempool.space network totals inside it carry their own row date, `2026-08-30`.
 <!-- END generated: snapshot -->
 
 Requires Python 3.11+ and a network connection only for the second path below.

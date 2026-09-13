@@ -69,14 +69,22 @@ model:
   scenarios:
     capacities_btc: [0.1, 1.0, 10.0]
     # One row per (capacity, ppm) pair.
-    #   100  OBSERVED  network median fee rate, mempool.space med_fee_rate
+    #   50   OBSERVED  network median fee rate per Amboss (getNetworkMetrics)
+    #   100  OBSERVED  network median fee rate per mempool.space (med_fee_rate)
     #   464  OBSERVED  median across Amboss-ranked nodes, ppm_distribution.csv p50
     #   1000 ASSUMPTION an aggressive fee strategy
-    # The two observed values are those of the 2026-09-13 snapshot. After a new
-    # snapshot, re-read them from network_snapshot.csv and ppm_distribution.csv
-    # and update this list — build_tables.py prints both next to each other in
-    # its summary so the drift is visible.
-    ppm_list: [100, 464, 1000]
+    #
+    # 50 and 100 are BOTH the "network median" — the two sources disagree by a
+    # factor of two (see source_comparison.csv). Running only one of them would
+    # make the headline result depend on which source was asked, and the
+    # less favourable reading is the one that would have been dropped. The
+    # tables label each by its source rather than calling either "the" median.
+    #
+    # The observed values are those of the 2026-09-13 snapshot. After a new
+    # snapshot, re-read them from source_comparison.csv and ppm_distribution.csv
+    # and update this list — build_tables.py prints them in its summary so the
+    # drift is visible, and the ppm_basis column records how each was labelled.
+    ppm_list: [50, 100, 464, 1000]
 
   # r_reb: rebalancing outlay as a share of gross routing revenue. ASSUMPTION.
   rebalancing_share_of_earned: 0.30

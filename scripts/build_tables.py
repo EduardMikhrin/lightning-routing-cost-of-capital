@@ -986,6 +986,42 @@ def resolve_cost_of_capital(cfg: dict, table2: pd.DataFrame) -> tuple[str, float
     return wanted, float(match.iloc[0])
 
 
+def build_ppm_labels(
+    cfg: dict, network: dict, amboss_network: dict, distribution: dict
+) -> dict:
+    """Map each scenario fee rate to the observation it came from.
+
+    mempool.space and Amboss disagree on the network median fee rate by a factor
+    of two, so "network median" is not one number and must not be printed as if
+    it were. Each observed rate is labelled by its source; anything that matches
+    no observation is the author's choice and is labelled an assumption, which is
+    what makes it visible whether a scenario that clears the benchmark rests on
+    measured behaviour or on a chosen fee policy.
+    """
+    candidates = [
+        (float(network["med_fee_rate"]), "mempool.space network median (observed)"),
+        (float(amboss_network["med_fee_rate"]), "Amboss network median (observed)"),
+    ]
+    p50 = distribution["percentiles"].get(50)
+    if p50:
+        candidates.append(
+            (float(p50["value"]), "Amboss ranked-node median (observed)")
+        )
+
+    labels = {}
+    for ppm in cfg["model"]["scenarios"]["ppm_list"]:
+        ppm = float(ppm)
+        for value, label in candidates:
+            # Config carries rounded observations, so match on a tolerance
+            # rather than on equality.
+            if abs(ppm - value) < 1.0:
+                labels[ppm] = label
+                break
+        else:
+            labels[ppm] = "assumption"
+    return labels
+
+
 def scenario_grid(cfg: dict) -> list[tuple[float, float]]:
     """Every (capacity, ppm) pair the scenario tables are evaluated on."""
     scenarios = cfg["model"]["scenarios"]
@@ -998,7 +1034,9 @@ def scenario_grid(cfg: dict) -> list[tuple[float, float]]:
     return [(capacity, ppm) for capacity in capacities for ppm in ppm_list]
 
 
-def write_scenarios(cfg: dict, model: Model, coc_pct: float) -> pd.DataFrame:
+def write_scenarios(
+    cfg: dict, model: Model, coc_pct: float, ppm_labels: dict
+) -> pd.DataFrame:
     """One row per (capacity, ppm) pair, at the baseline utilisation.
 
     Break-even utilisation is carried alongside because it depends on capacity:
@@ -1010,6 +1048,7 @@ def write_scenarios(cfg: dict, model: Model, coc_pct: float) -> pd.DataFrame:
     for capacity, ppm in scenario_grid(cfg):
         terms = model.terms(capacity, ppm, u)
         break_even = model.break_even_u(capacity, ppm, coc_pct)
+        terms["ppm_basis"] = _ppm_label(ppm, ppm_labels)
         terms["cost_of_capital_annual_pct"] = round(coc_pct, 4)
         terms["break_even_u"] = "" if break_even is None else round(break_even, 6)
         terms["break_even_attainable"] = (
@@ -1021,6 +1060,7 @@ def write_scenarios(cfg: dict, model: Model, coc_pct: float) -> pd.DataFrame:
         [
             "node_capacity_btc",
             "ppm",
+            "ppm_basis",
             "utilization",
             "f_earned_sat",
             "f_rebalancing_sat",
@@ -1042,7 +1082,7 @@ def write_scenarios(cfg: dict, model: Model, coc_pct: float) -> pd.DataFrame:
 
 
 def write_onchain_sensitivity(
-    cfg: dict, model: Model, fees: dict, coc_pct: float
+    cfg: dict, model: Model, fees: dict, coc_pct: float, ppm_labels: dict
 ) -> pd.DataFrame:
     """The scenario grid re-run at several on-chain fee levels.
 
@@ -1080,6 +1120,7 @@ def write_onchain_sensitivity(
                     ),
                     "node_capacity_btc": capacity,
                     "ppm": ppm,
+                    "ppm_basis": _ppm_label(ppm, ppm_labels),
                     "utilization": u,
                     "onchain_amortized_sat": round(terms["onchain_amortized_sat"], 0),
                     "net_income_sat": round(terms["net_income_sat"], 0),
@@ -1118,7 +1159,8 @@ def resolve_ppm_ref(cfg: dict, network: dict) -> tuple[float, str]:
 
 
 def write_elasticity_sensitivity(
-    cfg: dict, model: Model, network: dict, coc_pct: float, scenarios: pd.DataFrame
+    cfg: dict, model: Model, network: dict, coc_pct: float,
+    scenarios: pd.DataFrame, ppm_labels: dict,
 ) -> pd.DataFrame:
     """The scenario grid with utilisation responding to the fee rate.
 
@@ -1148,6 +1190,7 @@ def write_elasticity_sensitivity(
                     "epsilon": epsilon,
                     "node_capacity_btc": capacity,
                     "ppm": ppm,
+                    "ppm_basis": _ppm_label(ppm, ppm_labels),
                     "ppm_ref": ppm_ref,
                     "u0": u0,
                     "utilization": round(u, 6),
@@ -1393,23 +1436,15 @@ def write_figure(cfg: dict, model: Model, coc_source: str, coc_pct: float) -> No
 # here and injected between markers; the interpretation around them is written
 # by hand and is never touched by the build.
 
-def _ppm_label(ppm: float, network: dict, distribution: dict) -> str:
-    if abs(ppm - float(network["med_fee_rate"])) < 0.5:
-        return "network median"
-    p50 = distribution["percentiles"].get(50)
-    if p50 and abs(ppm - float(p50["value"])) < 1.0:
-        return "ranked-node median"
-    # Anything that is not one of the snapshot's observed medians is a fee
-    # policy the author chose. Saying so in the table is the point: it shows at
-    # a glance whether the scenarios that clear the benchmark are observed ones.
-    return "assumption"
+def _ppm_label(ppm: float, labels: dict) -> str:
+    return labels.get(float(ppm), "assumption")
 
 
 def _headline_markdown(
     cfg: dict,
     model: Model,
     network: dict,
-    distribution: dict,
+    ppm_labels: dict,
     scenarios: pd.DataFrame,
     onchain: pd.DataFrame,
     elasticity: pd.DataFrame,
@@ -1430,8 +1465,8 @@ def _headline_markdown(
         "|---:|---:|---:|---:|---:|:--|",
     ]
     for _, row in scenarios.iterrows():
-        label = _ppm_label(row["ppm"], network, distribution)
-        ppm_cell = f"{row['ppm']:.0f}" + (f" ({label})" if label else "")
+        label = _ppm_label(row["ppm"], ppm_labels).replace(" (observed)", "")
+        ppm_cell = f"{row['ppm']:.0f} ({label})"
         gap = row["apy_routing_pct"] - coc_pct
         clears = row["apy_routing_pct"] >= coc_pct
         apy_cell = f"{row['apy_routing_pct']:+.2f} %"
@@ -1450,7 +1485,27 @@ def _headline_markdown(
     smallest = float(scenarios["node_capacity_btc"].min())
     opex_share = opex_sat / (smallest * SAT_PER_BTC) * 100.0
 
+    # The two sources disagree on the network median by a factor of two, so the
+    # headline has to be stated under each reading rather than under one.
+    source_lines = []
+    for ppm in sorted(ppm_labels):
+        label = ppm_labels[ppm]
+        if "network median" not in label:
+            continue
+        sub = scenarios[scenarios["ppm"] == ppm]
+        n_clear = int((sub["apy_routing_pct"] >= coc_pct).sum())
+        source_lines.append(
+            f"- **{label.replace(' (observed)', '')}** ({ppm:.0f} ppm): "
+            f"**{n_clear} of {len(sub)}** node sizes clear the benchmark "
+            f"(APY {sub['apy_routing_pct'].min():+.2f} % to "
+            f"{sub['apy_routing_pct'].max():+.2f} %)."
+        )
+
     lines += [
+        "",
+        "Under each source's reading of the network median fee rate:",
+        "",
+        *source_lines,
         "",
         f"**{cleared} of {len(scenarios)}** scenarios clear the benchmark at "
         f"`u = {u:.2f}`. Fixed OPEX of "
@@ -1562,6 +1617,7 @@ def main() -> int:
     index = load_lnr_index(cfg)
 
     model = Model(cfg, network, fees, price)
+    ppm_labels = build_ppm_labels(cfg, network, amboss_network, distribution)
 
     print("[build_tables] writing derived tables")
     write_network_snapshot(network, fees, price, history)
@@ -1569,9 +1625,11 @@ def main() -> int:
     comparison = write_source_comparison(network, amboss_network)
     table2 = write_cost_of_capital(cfg, offers, orders, index)
     coc_source, coc_pct = resolve_cost_of_capital(cfg, table2)
-    table3 = write_scenarios(cfg, model, coc_pct)
-    onchain = write_onchain_sensitivity(cfg, model, fees, coc_pct)
-    elasticity = write_elasticity_sensitivity(cfg, model, network, coc_pct, table3)
+    table3 = write_scenarios(cfg, model, coc_pct, ppm_labels)
+    onchain = write_onchain_sensitivity(cfg, model, fees, coc_pct, ppm_labels)
+    elasticity = write_elasticity_sensitivity(
+        cfg, model, network, coc_pct, table3, ppm_labels
+    )
     sensitivity = write_sensitivity(cfg, model, coc_source, coc_pct)
 
     print("[build_tables] writing figure")
@@ -1591,6 +1649,7 @@ def main() -> int:
             float(level) for level in cfg["onchain_sensitivity"]["sat_per_vb_levels"]
         ],
         "scenario_ppm_list": [float(x) for x in cfg["model"]["scenarios"]["ppm_list"]],
+        "scenario_ppm_basis": {str(k): v for k, v in sorted(ppm_labels.items())},
         "elasticity": {
             "epsilon_list": [float(e) for e in cfg["elasticity"]["epsilon_list"]],
             "ppm_ref": float(elasticity["ppm_ref"].iloc[0]),
@@ -1623,7 +1682,7 @@ def main() -> int:
                 f"date, `{_date_only(network['data_as_of_utc'])}`."
             ),
             "headline": _headline_markdown(
-                cfg, model, network, distribution, table3, onchain, elasticity,
+                cfg, model, network, ppm_labels, table3, onchain, elasticity,
                 coc_source, coc_pct, orders, snapshot_date,
             ),
         }

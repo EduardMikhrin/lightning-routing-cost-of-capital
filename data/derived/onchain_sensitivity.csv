@@ -1,28 +1,37 @@
-sat_per_vb,basis,source,node_capacity_btc,ppm,utilization,onchain_amortized_sat,net_income_sat,apy_routing_pct,cost_of_capital_annual_pct,clears_benchmark,break_even_u,break_even_attainable
-1.0,observed,mempool.space fees_recommended.halfHourFee,0.1,100.0,0.15,1045.0,-351628.0,-3.5163,2.3715,False,2.454415,False
-1.0,observed,mempool.space fees_recommended.halfHourFee,0.1,464.0,0.15,1045.0,-212125.0,-2.1213,2.3715,False,0.528969,True
-1.0,observed,mempool.space fees_recommended.halfHourFee,0.1,1000.0,0.15,1045.0,-6703.0,-0.067,2.3715,False,0.245441,True
-1.0,observed,mempool.space fees_recommended.halfHourFee,1.0,100.0,0.15,10447.0,-16105.0,-0.0161,2.3715,False,1.084483,False
-1.0,observed,mempool.space fees_recommended.halfHourFee,1.0,464.0,0.15,10447.0,1378925.0,1.3789,2.3715,False,0.233725,True
-1.0,observed,mempool.space fees_recommended.halfHourFee,1.0,1000.0,0.15,10447.0,3433145.0,3.4331,2.3715,True,0.108448,True
-1.0,observed,mempool.space fees_recommended.halfHourFee,10.0,100.0,0.15,104469.0,3339122.0,0.3339,2.3715,False,0.94749,True
-1.0,observed,mempool.space fees_recommended.halfHourFee,10.0,464.0,0.15,104469.0,17289422.0,1.7289,2.3715,False,0.204201,True
-1.0,observed,mempool.space fees_recommended.halfHourFee,10.0,1000.0,0.15,104469.0,37831622.0,3.7832,2.3715,True,0.094749,True
-50.0,stress,config onchain_sensitivity.sat_per_vb_levels,0.1,100.0,0.15,52235.0,-402818.0,-4.0282,2.3715,False,2.654767,False
-50.0,stress,config onchain_sensitivity.sat_per_vb_levels,0.1,464.0,0.15,52235.0,-263315.0,-2.6332,2.3715,False,0.572148,True
-50.0,stress,config onchain_sensitivity.sat_per_vb_levels,0.1,1000.0,0.15,52235.0,-57893.0,-0.5789,2.3715,False,0.265477,True
-50.0,stress,config onchain_sensitivity.sat_per_vb_levels,1.0,100.0,0.15,522347.0,-528005.0,-0.528,2.3715,False,1.284836,False
-50.0,stress,config onchain_sensitivity.sat_per_vb_levels,1.0,464.0,0.15,522347.0,867025.0,0.867,2.3715,False,0.276904,True
-50.0,stress,config onchain_sensitivity.sat_per_vb_levels,1.0,1000.0,0.15,522347.0,2921245.0,2.9212,2.3715,True,0.128484,True
-50.0,stress,config onchain_sensitivity.sat_per_vb_levels,10.0,100.0,0.15,5223468.0,-1779876.0,-0.178,2.3715,False,1.147843,False
-50.0,stress,config onchain_sensitivity.sat_per_vb_levels,10.0,464.0,0.15,5223468.0,12170424.0,1.217,2.3715,False,0.24738,True
-50.0,stress,config onchain_sensitivity.sat_per_vb_levels,10.0,1000.0,0.15,5223468.0,32712624.0,3.2713,2.3715,True,0.114784,True
-200.0,stress,config onchain_sensitivity.sat_per_vb_levels,0.1,100.0,0.15,208939.0,-559522.0,-5.5952,2.3715,False,3.26809,False
-200.0,stress,config onchain_sensitivity.sat_per_vb_levels,0.1,464.0,0.15,208939.0,-420019.0,-4.2002,2.3715,False,0.70433,True
-200.0,stress,config onchain_sensitivity.sat_per_vb_levels,0.1,1000.0,0.15,208939.0,-214597.0,-2.146,2.3715,False,0.326809,True
-200.0,stress,config onchain_sensitivity.sat_per_vb_levels,1.0,100.0,0.15,2089387.0,-2095046.0,-2.095,2.3715,False,1.898159,False
-200.0,stress,config onchain_sensitivity.sat_per_vb_levels,1.0,464.0,0.15,2089387.0,-700016.0,-0.7,2.3715,False,0.409086,True
-200.0,stress,config onchain_sensitivity.sat_per_vb_levels,1.0,1000.0,0.15,2089387.0,1354204.0,1.3542,2.3715,False,0.189816,True
-200.0,stress,config onchain_sensitivity.sat_per_vb_levels,10.0,100.0,0.15,20893873.0,-17450281.0,-1.745,2.3715,False,1.761166,False
-200.0,stress,config onchain_sensitivity.sat_per_vb_levels,10.0,464.0,0.15,20893873.0,-3499981.0,-0.35,2.3715,False,0.379562,True
-200.0,stress,config onchain_sensitivity.sat_per_vb_levels,10.0,1000.0,0.15,20893873.0,17042219.0,1.7042,2.3715,False,0.176117,True
+sat_per_vb,basis,source,node_capacity_btc,ppm,ppm_basis,utilization,onchain_amortized_sat,net_income_sat,apy_routing_pct,cost_of_capital_annual_pct,clears_benchmark,break_even_u,break_even_attainable
+1.0,observed,mempool.space fees_recommended.halfHourFee,0.1,50.0,Amboss network median (observed),0.15,1045.0,-370891.0,-3.7089,2.3715,False,4.909619,False
+1.0,observed,mempool.space fees_recommended.halfHourFee,0.1,100.0,mempool.space network median (observed),0.15,1045.0,-351729.0,-3.5173,2.3715,False,2.45481,False
+1.0,observed,mempool.space fees_recommended.halfHourFee,0.1,464.0,Amboss ranked-node median (observed),0.15,1045.0,-212226.0,-2.1223,2.3715,False,0.529054,True
+1.0,observed,mempool.space fees_recommended.halfHourFee,0.1,1000.0,assumption,0.15,1045.0,-6804.0,-0.068,2.3715,False,0.245481,True
+1.0,observed,mempool.space fees_recommended.halfHourFee,1.0,50.0,Amboss network median (observed),0.15,10447.0,-207831.0,-0.2078,2.3715,False,2.169046,False
+1.0,observed,mempool.space fees_recommended.halfHourFee,1.0,100.0,mempool.space network median (observed),0.15,10447.0,-16206.0,-0.0162,2.3715,False,1.084523,False
+1.0,observed,mempool.space fees_recommended.halfHourFee,1.0,464.0,Amboss ranked-node median (observed),0.15,10447.0,1378824.0,1.3788,2.3715,False,0.233733,True
+1.0,observed,mempool.space fees_recommended.halfHourFee,1.0,1000.0,assumption,0.15,10447.0,3433044.0,3.433,2.3715,True,0.108452,True
+1.0,observed,mempool.space fees_recommended.halfHourFee,10.0,50.0,Amboss network median (observed),0.15,104469.0,1422771.0,0.1423,2.3715,False,1.894989,False
+1.0,observed,mempool.space fees_recommended.halfHourFee,10.0,100.0,mempool.space network median (observed),0.15,104469.0,3339021.0,0.3339,2.3715,False,0.947494,True
+1.0,observed,mempool.space fees_recommended.halfHourFee,10.0,464.0,Amboss ranked-node median (observed),0.15,104469.0,17289321.0,1.7289,2.3715,False,0.204201,True
+1.0,observed,mempool.space fees_recommended.halfHourFee,10.0,1000.0,assumption,0.15,104469.0,37831521.0,3.7832,2.3715,True,0.094749,True
+50.0,stress,config onchain_sensitivity.sat_per_vb_levels,0.1,50.0,Amboss network median (observed),0.15,52235.0,-422081.0,-4.2208,2.3715,False,5.310324,False
+50.0,stress,config onchain_sensitivity.sat_per_vb_levels,0.1,100.0,mempool.space network median (observed),0.15,52235.0,-402919.0,-4.0292,2.3715,False,2.655162,False
+50.0,stress,config onchain_sensitivity.sat_per_vb_levels,0.1,464.0,Amboss ranked-node median (observed),0.15,52235.0,-263416.0,-2.6342,2.3715,False,0.572233,True
+50.0,stress,config onchain_sensitivity.sat_per_vb_levels,0.1,1000.0,assumption,0.15,52235.0,-57994.0,-0.5799,2.3715,False,0.265516,True
+50.0,stress,config onchain_sensitivity.sat_per_vb_levels,1.0,50.0,Amboss network median (observed),0.15,522347.0,-719731.0,-0.7197,2.3715,False,2.56975,False
+50.0,stress,config onchain_sensitivity.sat_per_vb_levels,1.0,100.0,mempool.space network median (observed),0.15,522347.0,-528106.0,-0.5281,2.3715,False,1.284875,False
+50.0,stress,config onchain_sensitivity.sat_per_vb_levels,1.0,464.0,Amboss ranked-node median (observed),0.15,522347.0,866924.0,0.8669,2.3715,False,0.276913,True
+50.0,stress,config onchain_sensitivity.sat_per_vb_levels,1.0,1000.0,assumption,0.15,522347.0,2921144.0,2.9211,2.3715,True,0.128488,True
+50.0,stress,config onchain_sensitivity.sat_per_vb_levels,10.0,50.0,Amboss network median (observed),0.15,5223468.0,-3696227.0,-0.3696,2.3715,False,2.295693,False
+50.0,stress,config onchain_sensitivity.sat_per_vb_levels,10.0,100.0,mempool.space network median (observed),0.15,5223468.0,-1779977.0,-0.178,2.3715,False,1.147846,False
+50.0,stress,config onchain_sensitivity.sat_per_vb_levels,10.0,464.0,Amboss ranked-node median (observed),0.15,5223468.0,12170323.0,1.217,2.3715,False,0.247381,True
+50.0,stress,config onchain_sensitivity.sat_per_vb_levels,10.0,1000.0,assumption,0.15,5223468.0,32712523.0,3.2713,2.3715,True,0.114785,True
+200.0,stress,config onchain_sensitivity.sat_per_vb_levels,0.1,50.0,Amboss network median (observed),0.15,208939.0,-578785.0,-5.7879,2.3715,False,6.53697,False
+200.0,stress,config onchain_sensitivity.sat_per_vb_levels,0.1,100.0,mempool.space network median (observed),0.15,208939.0,-559623.0,-5.5962,2.3715,False,3.268485,False
+200.0,stress,config onchain_sensitivity.sat_per_vb_levels,0.1,464.0,Amboss ranked-node median (observed),0.15,208939.0,-420120.0,-4.2012,2.3715,False,0.704415,True
+200.0,stress,config onchain_sensitivity.sat_per_vb_levels,0.1,1000.0,assumption,0.15,208939.0,-214698.0,-2.147,2.3715,False,0.326849,True
+200.0,stress,config onchain_sensitivity.sat_per_vb_levels,1.0,50.0,Amboss network median (observed),0.15,2089387.0,-2286771.0,-2.2868,2.3715,False,3.796396,False
+200.0,stress,config onchain_sensitivity.sat_per_vb_levels,1.0,100.0,mempool.space network median (observed),0.15,2089387.0,-2095146.0,-2.0951,2.3715,False,1.898198,False
+200.0,stress,config onchain_sensitivity.sat_per_vb_levels,1.0,464.0,Amboss ranked-node median (observed),0.15,2089387.0,-700116.0,-0.7001,2.3715,False,0.409094,True
+200.0,stress,config onchain_sensitivity.sat_per_vb_levels,1.0,1000.0,assumption,0.15,2089387.0,1354104.0,1.3541,2.3715,False,0.18982,True
+200.0,stress,config onchain_sensitivity.sat_per_vb_levels,10.0,50.0,Amboss network median (observed),0.15,20893873.0,-19366632.0,-1.9367,2.3715,False,3.522339,False
+200.0,stress,config onchain_sensitivity.sat_per_vb_levels,10.0,100.0,mempool.space network median (observed),0.15,20893873.0,-17450382.0,-1.745,2.3715,False,1.76117,False
+200.0,stress,config onchain_sensitivity.sat_per_vb_levels,10.0,464.0,Amboss ranked-node median (observed),0.15,20893873.0,-3500082.0,-0.35,2.3715,False,0.379562,True
+200.0,stress,config onchain_sensitivity.sat_per_vb_levels,10.0,1000.0,assumption,0.15,20893873.0,17042118.0,1.7042,2.3715,False,0.176117,True

@@ -1,9 +1,9 @@
 metric,value,exact,basis,snapshot_date,note
-p25_fee_rate_ppm,103.64,True,"Amboss local_buckets over 17 of 20 ranked nodes, weighted by channels (n=6585), interpolated within the containing bucket",2026-09-13,
-p50_fee_rate_ppm,464.15,True,"Amboss local_buckets over 17 of 20 ranked nodes, weighted by channels (n=6585), interpolated within the containing bucket",2026-09-13,
-p75_fee_rate_ppm,920.5,True,"Amboss local_buckets over 17 of 20 ranked nodes, weighted by channels (n=6585), interpolated within the containing bucket",2026-09-13,
-p90_fee_rate_ppm,1844.67,True,"Amboss local_buckets over 17 of 20 ranked nodes, weighted by channels (n=6585), interpolated within the containing bucket",2026-09-13,
-nodes_in_distribution,17.0,True,"Amboss local_buckets over 17 of 20 ranked nodes, weighted by channels (n=6585), interpolated within the containing bucket",2026-09-13,3 of 20 ranked nodes returned an empty local_buckets array and contribute nothing; their pubkeys are listed in _sources.json.
-channels_in_distribution,6585.0,True,"Amboss local_buckets over 17 of 20 ranked nodes, weighted by channels (n=6585), interpolated within the containing bucket",2026-09-13,"total histogram weight, weighted by channels"
+p25_fee_rate_ppm,103.44,True,"Amboss local_buckets over 17 of 20 ranked nodes, weighted by channels (n=6586), interpolated within the containing bucket",2026-09-13,
+p50_fee_rate_ppm,464.16,True,"Amboss local_buckets over 17 of 20 ranked nodes, weighted by channels (n=6586), interpolated within the containing bucket",2026-09-13,
+p75_fee_rate_ppm,920.49,True,"Amboss local_buckets over 17 of 20 ranked nodes, weighted by channels (n=6586), interpolated within the containing bucket",2026-09-13,
+p90_fee_rate_ppm,1844.75,True,"Amboss local_buckets over 17 of 20 ranked nodes, weighted by channels (n=6586), interpolated within the containing bucket",2026-09-13,
+nodes_in_distribution,17.0,True,"Amboss local_buckets over 17 of 20 ranked nodes, weighted by channels (n=6586), interpolated within the containing bucket",2026-09-13,3 of 20 ranked nodes returned an empty local_buckets array and contribute nothing; their pubkeys are listed in _sources.json.
+channels_in_distribution,6586.0,True,"Amboss local_buckets over 17 of 20 ranked nodes, weighted by channels (n=6586), interpolated within the containing bucket",2026-09-13,"total histogram weight, weighted by channels"
 network_med_fee_rate_ppm,100.0,True,mempool.space lightning/statistics/latest med_fee_rate (all announced channels),2026-08-30,
 network_avg_fee_rate_ppm,824.0,True,mempool.space lightning/statistics/latest avg_fee_rate (all announced channels),2026-08-30,
