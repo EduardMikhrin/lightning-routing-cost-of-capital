@@ -1379,24 +1379,35 @@ def _headline_markdown(
         + "."
     )
 
+    # Show APY across ppm for every epsilon, not just the best cell: the whole
+    # point of the sweep is the sign change in d(APY)/d(ppm) at unit elasticity,
+    # and a "best APY" column hides it.
+    largest = float(elasticity["node_capacity_btc"].max())
+    ppms = sorted(elasticity["ppm"].unique())
     lines += [
         "",
         "### If demand responds to price",
         "",
-        f"`u(ppm) = u0 · (ppm / {elasticity['ppm_ref'].iloc[0]:.0f})^(−ε)`, "
-        f"`u0 = {float(elasticity['u0'].iloc[0]):.2f}`. ε = 0 is the inelastic "
-        "case used everywhere above.",
+        f"`u(ppm) = u0 · (ppm / {elasticity['ppm_ref'].iloc[0]:.0f})^(−ε)` with "
+        f"`u0 = {float(elasticity['u0'].iloc[0]):.2f}`, so gross revenue scales "
+        "as `ppm^(1−ε)` and ε = 1 is the pivot. APY for the "
+        f"{largest:g} BTC node, with the count over all "
+        f"{len(elasticity[elasticity.epsilon == elasticity.epsilon.iloc[0]])} "
+        "scenarios:",
         "",
-        "| ε | scenarios clearing benchmark | best APY | at |",
-        "|---:|---:|---:|:--|",
+        "| ε | " + " | ".join(f"{ppm:.0f} ppm" for ppm in ppms)
+        + " | clearing benchmark |",
+        "|---:|" + "---:|" * (len(ppms) + 1),
     ]
     for epsilon in sorted(elasticity["epsilon"].unique()):
         sub = elasticity[elasticity.epsilon == epsilon]
-        best = sub.loc[sub["apy_routing_pct"].idxmax()]
+        cells = []
+        for ppm in ppms:
+            row = sub[(sub.ppm == ppm) & (sub.node_capacity_btc == largest)]
+            cells.append(f"{float(row['apy_routing_pct'].iloc[0]):+.2f} %")
         lines.append(
-            f"| {epsilon:g} | {int(sub['clears_benchmark'].sum())}/{len(sub)} | "
-            f"{best['apy_routing_pct']:+.2f} % | "
-            f"{best['node_capacity_btc']:g} BTC / {best['ppm']:.0f} ppm |"
+            f"| {epsilon:g} | " + " | ".join(cells)
+            + f" | {int(sub['clears_benchmark'].sum())}/{len(sub)} |"
         )
 
     return "\n".join(lines)

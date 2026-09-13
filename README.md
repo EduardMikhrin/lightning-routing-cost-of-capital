@@ -200,8 +200,8 @@ Snapshot `2026-09-13`. Benchmark **2.37 %/yr** (`magma_orders_median`, n=3265) �
 | Capacity | ppm | APY | vs benchmark | break-even `u*` | reachable at `u ≤ 1` |
 |---:|---:|---:|---:|---:|:--|
 | 0.1 BTC | 100 (network median) | -3.52 % | -5.89 pp | 2.46 | **no** |
-| 0.1 BTC | 464 (ranked-node median) | -2.12 % | -4.50 pp | 0.53 | yes |
-| 0.1 BTC | 1000 (assumption) | -0.07 % | -2.44 pp | 0.25 | yes |
+| 0.1 BTC | 464 (ranked-node median) | -2.13 % | -4.50 pp | 0.53 | yes |
+| 0.1 BTC | 1000 (assumption) | -0.07 % | -2.45 pp | 0.25 | yes |
 | 1 BTC | 100 (network median) | -0.02 % | -2.39 pp | 1.08 | **no** |
 | 1 BTC | 464 (ranked-node median) | +1.38 % | -0.99 pp | 0.23 | yes |
 | 1 BTC | 1000 (assumption) | **+3.43 %** | **+1.06 pp** | 0.11 | yes |
@@ -209,7 +209,7 @@ Snapshot `2026-09-13`. Benchmark **2.37 %/yr** (`magma_orders_median`, n=3265) �
 | 10 BTC | 464 (ranked-node median) | +1.73 % | -0.64 pp | 0.20 | yes |
 | 10 BTC | 1000 (assumption) | **+3.78 %** | **+1.41 pp** | 0.09 | yes |
 
-**2 of 9** scenarios clear the benchmark at `u = 0.15`. Fixed OPEX of $300/yr is 389,181 sat at the snapshot rate, which is **3.9 %** of a 0.1 BTC node's capital (389,181 / 10,000,000 sat).
+**2 of 9** scenarios clear the benchmark at `u = 0.15`. Fixed OPEX of $300/yr is 389,570 sat at the snapshot rate, which is **3.9 %** of a 0.1 BTC node's capital (389,570 / 10,000,000 sat).
 
 ### Under a busier fee market
 
@@ -223,14 +223,14 @@ Snapshot `2026-09-13`. Benchmark **2.37 %/yr** (`magma_orders_median`, n=3265) �
 
 ### If demand responds to price
 
-`u(ppm) = u0 · (ppm / 100)^(−ε)`, `u0 = 0.15`. ε = 0 is the inelastic case used everywhere above.
+`u(ppm) = u0 · (ppm / 100)^(−ε)` with `u0 = 0.15`, so gross revenue scales as `ppm^(1−ε)` and ε = 1 is the pivot. APY for the 10 BTC node, with the count over all 9 scenarios:
 
-| ε | scenarios clearing benchmark | best APY | at |
-|---:|---:|---:|:--|
-| 0 | 2/9 | +3.78 % | 10 BTC / 1000 ppm |
-| 0.5 | 0/9 | +1.16 % | 10 BTC / 1000 ppm |
-| 1 | 0/9 | +0.33 % | 10 BTC / 100 ppm |
-| 1.5 | 0/9 | +0.33 % | 10 BTC / 100 ppm |
+| ε | 100 ppm | 464 ppm | 1000 ppm | clearing benchmark |
+|---:|---:|---:|---:|---:|
+| 0 | +0.33 % | +1.73 % | +3.78 % | 2/9 |
+| 0.5 | +0.33 % | +0.78 % | +1.16 % | 0/9 |
+| 1 | +0.33 % | +0.33 % | +0.33 % | 0/9 |
+| 1.5 | +0.33 % | +0.13 % | +0.07 % | 0/9 |
 <!-- END generated: headline -->
 
 ### What this means
@@ -264,11 +264,29 @@ assumptions about a fee market this snapshot did not see, labelled
 **The elasticity sweep is the load-bearing caveat.** Everywhere else this model
 holds `u` independent of `ppm` — perfectly inelastic demand for forwarding — and
 that single assumption is what makes "raise fees" look like free money. Let
-volume respond to price at all and the result inverts: at ε = 0.5 and above, *no
-scenario clears the benchmark at any fee rate*, because the revenue gained per
-unit routed is more than given back in units not routed. The ε = 0 column
-reproduces the main scenario table exactly, and the build asserts that identity
-rather than trusting it.
+volume respond to price and gross revenue becomes proportional to `ppm^(1−ε)`,
+so unit elasticity is the pivot and the sweep traces three distinct regimes:
+
+- **ε < 1 — fees still pay, but not enough.** Raising the fee rate still raises
+  revenue, and APY still climbs across the fee grid. The *direction* of the
+  inelastic result survives; only its magnitude collapses, and what remains
+  falls short of the benchmark.
+- **ε = 1 — fee policy stops mattering at all.** Volume lost exactly offsets
+  rate gained, revenue is invariant to `ppm`, and APY is identical at every fee
+  rate. The sweep reproduces this exactly rather than approximately, which is a
+  useful check that the curve is specified correctly.
+- **ε > 1 — raising fees destroys revenue.** The ordering inverts and the best
+  policy becomes the *lowest* fee rate in the grid. "Raise fees" is not merely
+  insufficient here, it is the wrong direction.
+
+So no scenario clears the benchmark once ε ≥ 0.5, but not for a single reason:
+below unit elasticity because a fee increase cannot close a ~2 pp gap, above it
+because the fee increase is self-defeating. Only the ε > 1 regime involves
+revenue being given back in units not routed — that mechanism does not apply at
+ε = 0.5, where revenue is still rising with the fee rate.
+
+The ε = 0 column reproduces the main scenario table exactly, and the build
+asserts that identity per scenario rather than trusting it.
 
 No elasticity of forwarding demand is observable from any public API, so ε is an
 assumption about behaviour, not a measurement — as is `u` itself. The honest
@@ -282,7 +300,7 @@ it does not.
 ## Snapshot
 
 <!-- BEGIN generated: snapshot -->
-**Snapshot `2026-09-13`** (ISO 8601; the files this build used were collected `2026-09-13T15:14:55Z` – `2026-09-13T15:15:29Z`). The mempool.space network totals inside it carry their own row date, `2026-08-30`.
+**Snapshot `2026-09-13`** (ISO 8601; the files this build used were collected `2026-09-13T15:21:47Z` – `2026-09-13T15:22:20Z`). The mempool.space network totals inside it carry their own row date, `2026-08-30`.
 <!-- END generated: snapshot -->
 
 `data/raw/manifest.jsonl` records the exact time and hash of every file ever
@@ -309,7 +327,7 @@ raw snapshots are append-only — nothing in `data/derived/` is built from it.
 ## Reproducibility
 
 <!-- BEGIN generated: snapshot -->
-**Snapshot `2026-09-13`** (ISO 8601; the files this build used were collected `2026-09-13T15:14:55Z` – `2026-09-13T15:15:29Z`). The mempool.space network totals inside it carry their own row date, `2026-08-30`.
+**Snapshot `2026-09-13`** (ISO 8601; the files this build used were collected `2026-09-13T15:21:47Z` – `2026-09-13T15:22:20Z`). The mempool.space network totals inside it carry their own row date, `2026-08-30`.
 <!-- END generated: snapshot -->
 
 Requires Python 3.11+ and a network connection only for the second path below.
